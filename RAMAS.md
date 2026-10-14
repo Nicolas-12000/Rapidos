@@ -37,7 +37,7 @@ Esto define el **orden natural de trabajo**: `catalogo` y `pedidos` son la base;
 - Test de integración `PedidoFlujoIT`.
 
 **Dev 5 (pedidos, en pareja con Dev 1)**
-Tareas pensadas para aprender sin bloquear a nadie:
+Tareas pensadas :
 1. DTOs de entrada/salida (`CrearPedidoRequest`, validaciones `@NotNull`, `@Min`).
 2. `schema.sql` y `data.sql` de la tabla de pedidos (con orientación de Dev 1).
 3. Pruebas unitarias de las reglas simples (total del pedido, cantidad mínima).
