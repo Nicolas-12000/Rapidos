@@ -7,6 +7,19 @@ spring:
     password: rapidos   # credencial local de demo
   sql:
     init:
-      mode: always      # ejecuta schema.sql y data.sql al arrancar
+      mode: always
+  modulith:
+    events:
+      jdbc:
+        schema-initialization:
+          enabled: true
+      republish-outstanding-events-on-restart: true
+
 server:
   port: 8080
+
+rapidos:
+  workers:
+    max-size: 4
+    core-size: 2
+    queue-capacity: 100
