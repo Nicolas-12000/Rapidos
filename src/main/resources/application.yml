@@ -1,0 +1,12 @@
+spring:
+  application:
+    name: rapidos
+  datasource:
+    url: jdbc:postgresql://localhost:5432/rapidos
+    username: rapidos
+    password: rapidos   # credencial local de demo
+  sql:
+    init:
+      mode: always      # ejecuta schema.sql y data.sql al arrancar
+server:
+  port: 8080

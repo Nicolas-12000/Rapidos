@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: rapidos-db
+    environment:
+      POSTGRES_DB: rapidos
+      POSTGRES_USER: rapidos
+      POSTGRES_PASSWORD: rapidos
+    ports:
+      - "5432:5432"
+    volumes:
+      - rapidos-data:/var/lib/postgresql/data
+volumes:
+  rapidos-data:

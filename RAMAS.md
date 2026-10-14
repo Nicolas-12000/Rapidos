@@ -1,0 +1,246 @@
+# RAMAS.md — Guía de ramas y reparto de trabajo (Rapidos)
+
+Equipo: **4 desarrolladores + 1 persona que está aprendiendo**.
+Regla de reparto: **un módulo lo trabajan 2 personas; los otros módulos, una persona cada uno.**
+
+---
+
+## 1. Reparto de módulos
+
+| Módulo | Personas | Por qué |
+|--------|----------|---------|
+| `pedidos` (orquestador) | **Dev 1 + Dev 5** (en pareja) | Es el módulo más grande y el corazón del flujo. Dev 1 guía; el aprendiz toma tareas pequeñas y bien acotadas |
+| `catalogo` | **Dev 2** | Independiente, con poco riesgo. Menú + caché |
+| `despacho` | **Dev 3** | Estados con llave única, worker que avisa, asignación de repartidor |
+| `ubicacion` | **Dev 4** | GPS en memoria con TTL + regla de degradación |
+
+> Cambia "Dev 1..4" por los nombres reales. Si el aprendiz prefiere otro módulo, el que importa es que **el módulo en pareja sea el de mayor tamaño**.
+
+### Quién depende de quién
+
+```
+despacho  ──► pedidos ──► catalogo
+ubicacion ──► pedidos
+ubicacion ──► despacho
+```
+
+Esto define el **orden natural de trabajo**: `catalogo` y `pedidos` son la base; `despacho` y `ubicacion` se apoyan en ellos.
+
+### Tareas por persona
+
+**Dev 1 (pedidos, líder del módulo)**
+- `PedidosApi`, `PedidoResumen`, eventos `PedidoConfirmado` y `ConfirmacionMedida`.
+- Crear pedido: validar contra `CatalogoApi`, calcular total, cobro simulado, idempotencia (`Idempotency-Key`).
+- Publicar `PedidoConfirmado` en la misma transacción que guarda el pedido (cola persistente con `spring-modulith-starter-jdbc`) y medir la duración de la confirmación (`ConfirmacionMedida`).
+- `GET /api/cola`: cantidad de eventos pendientes (usa `IncompleteEventPublications` de Spring Modulith).
+- Controlador `POST /api/pedidos` y `GET /api/pedidos/{id}`.
+- Test de integración `PedidoFlujoIT`.
+
+**Dev 5 (pedidos, en pareja con Dev 1)**
+Tareas pensadas para aprender sin bloquear a nadie:
+1. DTOs de entrada/salida (`CrearPedidoRequest`, validaciones `@NotNull`, `@Min`).
+2. `schema.sql` y `data.sql` de la tabla de pedidos (con orientación de Dev 1).
+3. Pruebas unitarias de las reglas simples (total del pedido, cantidad mínima).
+4. Mantener el ejemplo de `curl` del README funcionando.
+5. Revisar el `Dockerfile` ya incluido: construir la imagen (`docker build -t rapidos .`) y comprobar que la app arranca en contenedor.
+6. Revisar los Pull Requests de sus compañeros (aprende leyendo código).
+
+**Dev 2 (catalogo)**
+- `CatalogoApi`, `ItemMenu`.
+- Tablas `restaurante` y `item_menu` + datos de ejemplo.
+- Caché en memoria del menú (ADR-001, complemento C).
+- `GET /api/restaurantes/{id}/menu`.
+- **Entregar la interfaz `CatalogoApi` el primer día**, porque `pedidos` la necesita.
+
+**Dev 3 (despacho)**
+- `DespachoApi`, `EstadoEntrega` (`ASIGNADO`, `RECOGIDO`, `ENTREGADO`).
+- `@ApplicationModuleListener` de `PedidoConfirmado` (worker): asigna repartidor y "avisa" por consola (restaurante + repartidor).
+- El worker debe ser **idempotente**: guarda una llave única por pedido; si el evento llega dos veces, no procesa doble.
+- Configurar `@EnableAsync` y un `ThreadPoolTaskExecutor` acotado con los valores `rapidos.workers.*` de `application.yml` (el "tope de instancias" del ADR-001).
+- Prueba: forzar un fallo en el worker y comprobar que el evento se reintenta y el pedido se procesa una sola vez.
+- Estados con llave única: la misma llave no se procesa dos veces (ADR-003).
+- `POST /api/repartidores/{id}/estado`.
+
+**Dev 4 (ubicacion)**
+- `UbicacionApi`, `UbicacionActual`.
+- Almacén en memoria con vencimiento (TTL): solo la última posición por repartidor, **sin base de datos de pedidos**.
+- `ReglaDegradacionGps`: escucha `ConfirmacionMedida`; 5 s → 10 s → 15 s y regreso a 5 s.
+- `PUT /api/repartidores/{id}/ubicacion` y `GET /api/pedidos/{id}/ubicacion`.
+- Prueba de carga con `carga/pedidos.js` (k6): validar p95 < 2 s y 0 % de rechazos, y comprobar que la frecuencia del GPS sube a 10 s bajo presión. Reporta los resultados a Dev 1.
+
+---
+
+## 2. Flujo de ramas
+
+### Ramas permanentes
+
+| Rama | Uso |
+|------|-----|
+| `main` | Siempre estable y entregable. Solo recibe merges desde `develop` |
+| `develop` | Rama de integración. Todo el trabajo se junta aquí |
+
+### Ramas de trabajo (una por persona)
+
+Formato: `feature/<modulo>-<nombre>-<descripcion-corta>`
+
+| Persona | Rama inicial sugerida |
+|---------|-----------------------|
+| Dev 1 | `feature/pedidos-dev1-crear-pedido` |
+| Aprendiz | `feature/pedidos-aprendiz-dtos-y-validaciones` |
+| Dev 2 | `feature/catalogo-dev2-menu-y-cache` |
+| Dev 3 | `feature/despacho-dev3-estados` |
+| Dev 4 | `feature/ubicacion-dev4-gps-y-degradacion` |
+
+Otros prefijos: `fix/` para correcciones, `docs/` para documentación, `chore/` para configuración.
+
+### Paso 0: esqueleto común (antes de que todos empiecen)
+
+Una sola persona (Dev 1) crea la rama `chore/esqueleto` con:
+- `pom.xml` (Spring Boot, Spring Modulith, PostgreSQL, Validation, Test).
+- `docker-compose.yml` y `application.yml`.
+- `RapidosApplication` y los **4 paquetes de módulo vacíos**.
+- Las **interfaces públicas** (`CatalogoApi`, `PedidosApi`, `DespachoApi`, `UbicacionApi`) y los records/eventos, aunque sin implementación.
+- `ModulosTest` con `verify()`.
+
+Se mezcla a `develop` y **solo entonces** todos crean su rama. Así nadie pelea por los mismos archivos y los contratos entre módulos quedan claros desde el inicio.
+
+---
+
+## 3. Comandos paso a paso
+
+### Primera vez
+
+```bash
+git clone <URL-DEL-REPO>
+cd rapidos
+git checkout develop
+git pull origin develop
+```
+
+### Crear tu rama
+
+```bash
+git checkout develop
+git pull origin develop
+git checkout -b feature/catalogo-dev2-menu-y-cache
+```
+
+### Trabajar y guardar cambios
+
+```bash
+git status                      # ver qué cambió
+git add src/main/java/com/rapidos/catalogo/
+git commit -m "feat(catalogo): agrega caché en memoria del menú"
+git push -u origin feature/catalogo-dev2-menu-y-cache
+```
+
+### Mantener tu rama al día (hazlo cada día)
+
+```bash
+git checkout develop
+git pull origin develop
+git checkout feature/catalogo-dev2-menu-y-cache
+git merge develop
+```
+
+Si hay conflictos, Git marca los archivos con `<<<<<<<`. Se abren, se decide qué queda, se hace `git add <archivo>` y `git commit`. **Si no entiendes un conflicto, pregunta antes de borrar nada.**
+
+### Abrir un Pull Request
+
+1. Sube tu rama (`git push`).
+2. En GitHub/GitLab: *New Pull Request* → de tu rama **hacia `develop`**.
+3. Pide revisión al menos a **una persona** (el aprendiz también puede revisar).
+4. Cuando lo aprueban y las pruebas pasan, se mezcla. Después se puede borrar la rama.
+
+### Cuando una tarea termina
+
+```bash
+git checkout develop
+git pull origin develop
+git branch -d feature/catalogo-dev2-menu-y-cache
+# y se crea una rama nueva para la siguiente tarea
+```
+
+---
+
+## 4. Convenciones
+
+### Commits (formato `tipo(modulo): mensaje`)
+
+| Tipo | Cuándo |
+|------|--------|
+| `feat` | Funcionalidad nueva |
+| `fix` | Corrección de un error |
+| `test` | Pruebas |
+| `docs` | README, RAMAS, comentarios |
+| `chore` | Configuración, dependencias |
+| `refactor` | Cambio interno sin cambiar el comportamiento |
+
+Ejemplos: `feat(pedidos): valida idempotencia por llave`, `test(ubicacion): prueba degradación a 10 s`.
+
+### Reglas de oro del equipo
+
+1. **Trabaja solo dentro de tu módulo.** Si necesitas algo de otro módulo, usa su `XxxApi`.
+2. **Nunca importes `*.internal.*` de otro módulo.** `verify()` fallará.
+3. **Si necesitas cambiar una API pública**, avisa al dueño del módulo y haz un PR **pequeño solo con ese cambio**.
+4. **No hagas push directo a `develop` ni `main`.** Todo entra por Pull Request.
+5. **Antes de abrir un PR corre `./mvnw test`.** Si no pasa en tu máquina, no pasará en el equipo.
+6. **PR pequeños y frecuentes** (menos de ~300 líneas) son más fáciles de revisar que uno gigante.
+7. **No subas secretos reales.** Para la demo, las credenciales locales en `application.yml` están bien.
+
+### Lista de verificación antes de pedir revisión
+
+- [ ] `./mvnw test` pasa (incluido `ModulosTest`).
+- [ ] No hay imports a `internal` de otros módulos.
+- [ ] Solo toqué archivos de mi módulo (o lo hablé con el dueño).
+- [ ] El mensaje de commit sigue el formato.
+- [ ] Actualicé el README si cambié un endpoint.
+
+---
+
+## 5. Orden de trabajo sugerido
+
+| Fase | Qué pasa | Quién |
+|------|----------|-------|
+| 0 | Esqueleto + interfaces públicas + `ModulosTest` | Dev 1 |
+| 1 | `catalogo` completo; `pedidos` con DTOs y validaciones | Dev 2; Dev 1 + Aprendiz |
+| 2 | `pedidos` crea pedido, publica `PedidoConfirmado` | Dev 1 + Aprendiz |
+| 3 | `despacho` escucha el evento y maneja estados; `ubicacion` guarda GPS | Dev 3; Dev 4 |
+| 4 | Worker idempotente con reintento (`despacho`), degradación del GPS, `PedidoFlujoIT` | Dev 3; Dev 4; Dev 1 |
+| 5 | Prueba de carga (`carga/pedidos.js`), `Dockerfile` verificado, README final, revisión conjunta | Dev 4 + Aprendiz; todos |
+
+Mientras una dependencia no esté lista, usa un **stub** de su interfaz pública (por ejemplo un `CatalogoApi` falso en tus tests) y sigue avanzando.
+
+---
+
+## 6. Guía para quien está aprendiendo
+
+- Empieza leyendo el **README.md** y los **ADR** para entender el *porqué* antes del *cómo*.
+- Ejecuta el proyecto y prueba el `curl` de ejemplo antes de escribir código.
+- Trabaja siempre en pareja con Dev 1 las primeras tareas (*pair programming*): uno escribe, el otro lee y pregunta.
+- Haz commits pequeños; es más fácil deshacer un error pequeño.
+- **Preguntar es parte del trabajo.** Si llevas 30 minutos atascado, pide ayuda.
+- Revisar PRs de otros es una de las mejores formas de aprender; no hace falta encontrar errores, basta con preguntar "¿qué hace esto?".
+- Si algo sale mal con Git, no borres la carpeta: pide ayuda. Casi todo se puede recuperar (`git status`, `git log`, `git reflog`).
+
+### Comandos de rescate
+
+```bash
+git status                       # dónde estoy y qué cambió
+git log --oneline -10            # últimos commits
+git restore <archivo>            # descartar cambios no guardados de un archivo
+git stash                        # guardar cambios a un lado temporalmente
+git stash pop                    # recuperarlos
+git merge --abort                # cancelar un merge con conflictos
+```
+
+---
+
+## 7. Definición de "terminado" del proyecto
+
+- [ ] `./mvnw test` pasa, incluido `verify()` de Modulith.
+- [ ] Ningún import entre módulos apunta a `*.internal.*`.
+- [ ] El caso de uso principal funciona contra PostgreSQL local (`docker compose up`).
+- [ ] Idempotencia, degradación del GPS, prioridad de estados y reintento de la cola tienen al menos una prueba cada una.
+- [ ] `docker build -t rapidos .` funciona y `k6 run carga/pedidos.js` cumple p95 < 2 s y 0 % de rechazos.
+- [ ] El README y el diagrama generado en `target/spring-modulith-docs/` se entienden en 5 minutos.
