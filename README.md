@@ -8,7 +8,7 @@ Demo de **monolito modular** (Spring Boot + Spring Modulith + PostgreSQL) para u
 
 ## 1. Objetivo
 
-Entre las **7:00 y las 9:00 p. m. se factura el 70 % del día**. Si el sistema se satura en esa franja, el negocio pierde la mayor parte de sus ingresos. El equipo es de **3 desarrolladores** (hoy 4 + 1 aprendiz en este proyecto académico), así que se prefiere simplicidad y pocas piezas que operar.
+Entre las **7:00 y las 9:00 p. m. se factura el 70 % del día**. Si el sistema se satura en esa franja, el negocio pierde la mayor parte de sus ingresos. El equipo es de **5 desarrolladores (Dev 1 … Dev 5)** en este proyecto académico, así que se prefiere simplicidad y pocas piezas que operar.
 
 La demo debe mostrar, de punta a punta, que:
 

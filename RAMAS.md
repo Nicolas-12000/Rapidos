@@ -1,6 +1,6 @@
 # RAMAS.md — Guía de ramas y reparto de trabajo (Rapidos)
 
-Equipo: **4 desarrolladores + 1 persona que está aprendiendo**.
+Equipo: **5 desarrolladores (Dev 1 … Dev 5)**.
 Regla de reparto: **un módulo lo trabajan 2 personas; los otros módulos, una persona cada uno.**
 
 ---
@@ -9,12 +9,12 @@ Regla de reparto: **un módulo lo trabajan 2 personas; los otros módulos, una p
 
 | Módulo | Personas | Por qué |
 |--------|----------|---------|
-| `pedidos` (orquestador) | **Dev 1 + Dev 5** (en pareja) | Es el módulo más grande y el corazón del flujo. Dev 1 guía; el aprendiz toma tareas pequeñas y bien acotadas |
+| `pedidos` (orquestador) | **Dev 1 + Dev 5** (en pareja) | Es el módulo más grande y el corazón del flujo. Dev 1 guía; Dev 5 toma tareas pequeñas y bien acotadas |
 | `catalogo` | **Dev 2** | Independiente, con poco riesgo. Menú + caché |
 | `despacho` | **Dev 3** | Estados con llave única, worker que avisa, asignación de repartidor |
 | `ubicacion` | **Dev 4** | GPS en memoria con TTL + regla de degradación |
 
-> Cambia "Dev 1..4" por los nombres reales. Si el aprendiz prefiere otro módulo, el que importa es que **el módulo en pareja sea el de mayor tamaño**.
+> Cambia "Dev 1..5" por los nombres reales. Si Dev 5 prefiere otro módulo, el que importa es que **el módulo en pareja sea el de mayor tamaño**.
 
 ### Quién depende de quién
 
@@ -130,7 +130,7 @@ Formato recomendado para tareas acotadas: `feature/<modulo>-<nombre>-<descripcio
 |---------|---------------------------|
 | Cualquier dev | `{tu-nombre}` — rama personal (ej. `Nicolas`, `Maria`, `Pedro`) |
 | Dev 1 | `{tu-nombre}` y/o `feature/pedidos-dev1-crear-pedido` |
-| Dev 5 (aprendiz) | `{tu-nombre}` y/o `feature/pedidos-dev5-dtos-y-validaciones` |
+| Dev 5 | `{tu-nombre}` y/o `feature/pedidos-dev5-dtos-y-validaciones` |
 | Dev 2 | `{tu-nombre}` y/o `feature/catalogo-dev2-menu-y-cache` |
 | Dev 3 | `{tu-nombre}` y/o `feature/despacho-dev3-estados` |
 | Dev 4 | `{tu-nombre}` y/o `feature/ubicacion-dev4-gps-y-degradacion` |
@@ -321,7 +321,7 @@ Si hay conflictos, Git marca los archivos con `<<<<<<<`. Se abren, se decide qu�
 
 1. Sube tu rama (`git push`).
 2. En GitHub/GitLab: *New Pull Request* → de tu rama **hacia `develop`**.
-3. Pide revisión al menos a **una persona** (el aprendiz también puede revisar).
+3. Pide revisión al menos a **una persona** (Dev 5 también puede revisar).
 4. Cuando lo aprueban y las pruebas pasan, se mezcla. Después se puede borrar la rama.
 
 ### Cuando una tarea termina
@@ -375,17 +375,17 @@ Ejemplos: `feat(pedidos): valida idempotencia por llave`, `test(ubicacion): prue
 | Fase | Qué pasa | Quién |
 |------|----------|-------|
 | 0 | Esqueleto + interfaces públicas + `ModulosTest` | Dev 1 |
-| 1 | `catalogo` completo; `pedidos` con DTOs y validaciones | Dev 2; Dev 1 + Aprendiz |
-| 2 | `pedidos` crea pedido, publica `PedidoConfirmado` | Dev 1 + Aprendiz |
+| 1 | `catalogo` completo; `pedidos` con DTOs y validaciones | Dev 2; Dev 1 + Dev 5 |
+| 2 | `pedidos` crea pedido, publica `PedidoConfirmado` | Dev 1 + Dev 5 |
 | 3 | `despacho` escucha el evento y maneja estados; `ubicacion` guarda GPS | Dev 3; Dev 4 |
 | 4 | Worker idempotente con reintento (`despacho`), degradación del GPS, `PedidoFlujoIT` | Dev 3; Dev 4; Dev 1 |
-| 5 | Prueba de carga (`carga/pedidos.js`), `Dockerfile` verificado, README final, revisión conjunta | Dev 4 + Aprendiz; todos |
+| 5 | Prueba de carga (`carga/pedidos.js`), `Dockerfile` verificado, README final, revisión conjunta | Dev 4 + Dev 5; todos |
 
 Mientras una dependencia no esté lista, usa un **stub** de su interfaz pública (por ejemplo un `CatalogoApi` falso en tus tests) y sigue avanzando.
 
 ---
 
-## 6. Guía para quien está aprendiendo
+## 6. Guía para Dev 5
 
 - Empieza leyendo el **README.md** y los **ADR** para entender el *porqué* antes del *cómo*.
 - Ejecuta el proyecto y prueba el `curl` de ejemplo antes de escribir código.
