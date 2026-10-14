@@ -72,26 +72,75 @@ Tareas pensadas para aprender sin bloquear a nadie:
 
 ## 2. Flujo de ramas
 
-### Ramas permanentes
+Todo el código del equipo **vive en GitHub** en ramas remotas (`origin`). La regla simple:
 
-| Rama | Uso |
-|------|-----|
-| `main` | Siempre estable y entregable. Solo recibe merges desde `develop` |
-| `develop` | Rama de integración. Todo el trabajo se junta aquí |
+1. **`main`** — solo entregas estables (demo lista, tags de entrega).
+2. **`develop`** — **aquí se integra todo el trabajo del día a día.** Nadie acumula el proyecto solo en `main`.
+3. **Tu rama personal** — partes de `develop`, trabajas, abres PR **hacia `develop`**, y cuando se aprueba borras o sigues en la misma rama para la siguiente tarea.
 
-### Ramas de trabajo (una por persona)
+```
+main          ●────────────────────────────●  (release / entrega)
+               \                          /
+develop         ●──●──●──●──●──●──●──●──●  (integración continua)
+                     \    /      /
+Nicolas               ●──●──●──●           (ejemplo: rama de Nicolás)
+feature/...              ●──●              (otros: ramas por tarea)
+```
 
-Formato: `feature/<modulo>-<nombre>-<descripcion-corta>`
+### Ramas permanentes (en GitHub)
 
-| Persona | Rama inicial sugerida |
-|---------|-----------------------|
+| Rama | Dónde existe | Uso |
+|------|----------------|-----|
+| `main` | `origin/main` | Estable y entregable. Solo recibe merges desde `develop` (o release), no commits directos |
+| `develop` | `origin/develop` | **Rama de integración.** Todo el equipo sube trabajo aquí vía Pull Request |
+
+> En GitHub conviene marcar **`develop` como rama por defecto** mientras construyen la demo, y dejar `main` para hitos. Se cambia en *Settings → General → Default branch*.
+
+### Rama personal: `Nicolas`
+
+Nicolás (o quien lidere el esqueleto) usa una rama llamada **`Nicolas`** que **siempre se crea a partir de `develop`**, no de `main`:
+
+```bash
+git fetch origin
+git checkout develop
+git pull origin develop
+git checkout -b Nicolas    # primera vez
+# o, si ya existe en GitHub:
+git checkout Nicolas
+git pull origin Nicolas
+```
+
+Desde `Nicolas` puedes:
+
+- Hacer commits del esqueleto, documentación o coordinación.
+- Abrir PR **`Nicolas` → `develop`** cuando quieras integrar un bloque de cambios.
+- Crear ramas `feature/...` desde `Nicolas` o desde `develop` (lo habitual es **`develop`** para que todos integren al mismo sitio).
+
+El resto del equipo **no** tiene que usar la rama `Nicolas`; cada uno usa su propia rama (abajo). `Nicolas` es la rama de trabajo de Nicolás en el remoto.
+
+### Ramas de trabajo (una por persona o por tarea)
+
+Formato recomendado para tareas acotadas: `feature/<modulo>-<nombre>-<descripcion-corta>`
+
+| Persona | Rama en GitHub (ejemplo) |
+|---------|---------------------------|
+| Nicolás | `Nicolas` (rama larga personal) o `feature/pedidos-nicolas-...` |
 | Dev 1 | `feature/pedidos-dev1-crear-pedido` |
-| Aprendiz | `feature/pedidos-aprendiz-dtos-y-validaciones` |
+| Dev 5 (aprendiz) | `feature/pedidos-dev5-dtos-y-validaciones` |
 | Dev 2 | `feature/catalogo-dev2-menu-y-cache` |
 | Dev 3 | `feature/despacho-dev3-estados` |
 | Dev 4 | `feature/ubicacion-dev4-gps-y-degradacion` |
 
-Otros prefijos: `fix/` para correcciones, `docs/` para documentación, `chore/` para configuración.
+Otros prefijos: `fix/` correcciones, `docs/` documentación, `chore/` configuración.
+
+**Flujo estándar (todos, incluido quien use `Nicolas`):**
+
+```text
+develop  →  tu-rama  →  commits + push  →  Pull Request → develop  →  (más adelante) main
+```
+
+- **No** hagas `push` directo a `develop` ni a `main` si el equipo usa PR (regla en sección 4).
+- **Sí** haz `git push -u origin <tu-rama>` para que la rama exista en GitHub.
 
 ### Paso 0: esqueleto común (antes de que todos empiecen)
 
@@ -102,27 +151,53 @@ Una sola persona (Dev 1) crea la rama `chore/esqueleto` con:
 - Las **interfaces públicas** (`CatalogoApi`, `PedidosApi`, `DespachoApi`, `UbicacionApi`) y los records/eventos, aunque sin implementación.
 - `ModulosTest` con `verify()`.
 
-Se mezcla a `develop` y **solo entonces** todos crean su rama. Así nadie pelea por los mismos archivos y los contratos entre módulos quedan claros desde el inicio.
+Se abre PR hacia `develop` (por ejemplo desde la rama `Nicolas` o `chore/esqueleto`) y, al mezclarse, **solo entonces** el resto crea su rama desde `develop` actualizado. Así nadie pelea por los mismos archivos y los contratos entre módulos quedan claros desde el inicio.
 
 ---
 
 ## 3. Comandos paso a paso
 
-### Primera vez
+### Primera vez (clonar y quedarte en `develop`)
 
 ```bash
-git clone <URL-DEL-REPO>
+git clone https://github.com/Nicolas-12000/Rapidos.git
 cd rapidos
+git fetch origin
 git checkout develop
 git pull origin develop
 ```
 
-### Crear tu rama
+Si `develop` aún no existe en tu clon (solo `main`), pide a quien administre el repo que haya hecho `git push -u origin develop`, o créala tú desde `main` actualizado (ver abajo).
+
+### Crear `develop` en GitHub (una sola vez, desde `main`)
+
+Quien tenga el repo local al día en `main`:
+
+```bash
+git checkout main
+git pull origin main
+git checkout -b develop
+git push -u origin develop
+```
+
+A partir de aquí **todo el equipo trabaja contra `origin/develop`**.
+
+### Crear la rama `Nicolas` desde `develop` (una vez por máquina)
+
+```bash
+git checkout develop
+git pull origin develop
+git checkout -b Nicolas
+git push -u origin Nicolas
+```
+
+### Crear tu rama de feature (cualquier dev)
 
 ```bash
 git checkout develop
 git pull origin develop
 git checkout -b feature/catalogo-dev2-menu-y-cache
+git push -u origin feature/catalogo-dev2-menu-y-cache
 ```
 
 ### Trabajar y guardar cambios
