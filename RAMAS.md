@@ -83,8 +83,8 @@ main          ●─────────────────────
                \                          /
 develop         ●──●──●──●──●──●──●──●──●  (integración continua)
                      \    /      /
-Nicolas               ●──●──●──●           (ejemplo: rama de Nicolás)
-feature/...              ●──●              (otros: ramas por tarea)
+{tu-nombre}           ●──●──●──●           (rama personal de cada dev)
+feature/...              ●──●              (tareas cortas, opcional)
 ```
 
 ### Ramas permanentes (en GitHub)
@@ -96,27 +96,29 @@ feature/...              ●──●              (otros: ramas por tarea)
 
 > En GitHub conviene marcar **`develop` como rama por defecto** mientras construyen la demo, y dejar `main` para hitos. Se cambia en *Settings → General → Default branch*.
 
-### Rama personal: `Nicolas`
+### Rama personal: `{tu-nombre}`
 
-Nicolás (o quien lidere el esqueleto) usa una rama llamada **`Nicolas`** que **siempre se crea a partir de `develop`**, no de `main`:
+Cada desarrollador tiene **su propia rama en GitHub**, con un nombre corto y reconocible (por ejemplo el primer nombre: `Maria`, `Juan`, `Nicolas`). Sustituye `{tu-nombre}` por el tuyo en todos los comandos.
+
+La rama personal **siempre se crea a partir de `develop`**, no de `main`:
 
 ```bash
 git fetch origin
 git checkout develop
 git pull origin develop
-git checkout -b Nicolas    # primera vez
+git checkout -b {tu-nombre}    # primera vez; ej.: git checkout -b Maria
 # o, si ya existe en GitHub:
-git checkout Nicolas
-git pull origin Nicolas
+git checkout {tu-nombre}
+git pull origin {tu-nombre}
 ```
 
-Desde `Nicolas` puedes:
+Desde tu rama `{tu-nombre}` puedes:
 
-- Hacer commits del esqueleto, documentación o coordinación.
-- Abrir PR **`Nicolas` → `develop`** cuando quieras integrar un bloque de cambios.
-- Crear ramas `feature/...` desde `Nicolas` o desde `develop` (lo habitual es **`develop`** para que todos integren al mismo sitio).
+- Acumular varios commits de tu módulo antes de integrar.
+- Abrir PR **`{tu-nombre}` → `develop`** cuando quieras mezclar un bloque de cambios.
+- O usar además ramas `feature/...` por tarea (abajo); lo importante es que **todo termina en `develop` por PR**.
 
-El resto del equipo **no** tiene que usar la rama `Nicolas`; cada uno usa su propia rama (abajo). `Nicolas` es la rama de trabajo de Nicolás en el remoto.
+> **Convención del equipo:** una rama `{tu-nombre}` por persona en `origin`. No compartáis la misma rama personal entre dos devs.
 
 ### Ramas de trabajo (una por persona o por tarea)
 
@@ -124,16 +126,16 @@ Formato recomendado para tareas acotadas: `feature/<modulo>-<nombre>-<descripcio
 
 | Persona | Rama en GitHub (ejemplo) |
 |---------|---------------------------|
-| Nicolás | `Nicolas` (rama larga personal) o `feature/pedidos-nicolas-...` |
-| Dev 1 | `feature/pedidos-dev1-crear-pedido` |
-| Dev 5 (aprendiz) | `feature/pedidos-dev5-dtos-y-validaciones` |
-| Dev 2 | `feature/catalogo-dev2-menu-y-cache` |
-| Dev 3 | `feature/despacho-dev3-estados` |
-| Dev 4 | `feature/ubicacion-dev4-gps-y-degradacion` |
+| Cualquier dev | `{tu-nombre}` — rama personal (ej. `Nicolas`, `Maria`, `Pedro`) |
+| Dev 1 | `{tu-nombre}` y/o `feature/pedidos-dev1-crear-pedido` |
+| Dev 5 (aprendiz) | `{tu-nombre}` y/o `feature/pedidos-dev5-dtos-y-validaciones` |
+| Dev 2 | `{tu-nombre}` y/o `feature/catalogo-dev2-menu-y-cache` |
+| Dev 3 | `{tu-nombre}` y/o `feature/despacho-dev3-estados` |
+| Dev 4 | `{tu-nombre}` y/o `feature/ubicacion-dev4-gps-y-degradacion` |
 
 Otros prefijos: `fix/` correcciones, `docs/` documentación, `chore/` configuración.
 
-**Flujo estándar (todos, incluido quien use `Nicolas`):**
+**Flujo estándar (todos):**
 
 ```text
 develop  →  tu-rama  →  commits + push  →  Pull Request → develop  →  (más adelante) main
@@ -151,7 +153,7 @@ Una sola persona (Dev 1) crea la rama `chore/esqueleto` con:
 - Las **interfaces públicas** (`CatalogoApi`, `PedidosApi`, `DespachoApi`, `UbicacionApi`) y los records/eventos, aunque sin implementación.
 - `ModulosTest` con `verify()`.
 
-Se abre PR hacia `develop` (por ejemplo desde la rama `Nicolas` o `chore/esqueleto`) y, al mezclarse, **solo entonces** el resto crea su rama desde `develop` actualizado. Así nadie pelea por los mismos archivos y los contratos entre módulos quedan claros desde el inicio.
+Se abre PR hacia `develop` (desde `{tu-nombre}` o `chore/esqueleto`) y, al mezclarse, **solo entonces** el resto crea o actualiza su rama desde `develop`. Así nadie pelea por los mismos archivos y los contratos entre módulos quedan claros desde el inicio.
 
 ---
 
@@ -182,13 +184,13 @@ git push -u origin develop
 
 A partir de aquí **todo el equipo trabaja contra `origin/develop`**.
 
-### Crear la rama `Nicolas` desde `develop` (una vez por máquina)
+### Crear tu rama `{tu-nombre}` desde `develop` (una vez por persona)
 
 ```bash
 git checkout develop
 git pull origin develop
-git checkout -b Nicolas
-git push -u origin Nicolas
+git checkout -b {tu-nombre}          # ej.: git checkout -b Maria
+git push -u origin {tu-nombre}       # ej.: git push -u origin Maria
 ```
 
 ### Crear tu rama de feature (cualquier dev)
