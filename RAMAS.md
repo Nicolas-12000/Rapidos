@@ -37,7 +37,7 @@ Esto define el **orden natural de trabajo**: `catalogo` y `pedidos` son la base;
 - Test de integración `PedidoFlujoIT`.
 
 **Dev 5 (pedidos, en pareja con Dev 1)**
-Tareas pensadas para aprender sin bloquear a nadie:
+Tareas pensadas :
 1. DTOs de entrada/salida (`CrearPedidoRequest`, validaciones `@NotNull`, `@Min`).
 2. `schema.sql` y `data.sql` de la tabla de pedidos (con orientación de Dev 1).
 3. Pruebas unitarias de las reglas simples (total del pedido, cantidad mínima).
@@ -94,7 +94,9 @@ feature/...              ●──●              (tareas cortas, opcional)
 | `main` | `origin/main` | Estable y entregable. Solo recibe merges desde `develop` (o release), no commits directos |
 | `develop` | `origin/develop` | **Rama de integración.** Todo el equipo sube trabajo aquí vía Pull Request |
 
-> En GitHub conviene marcar **`develop` como rama por defecto** mientras construyen la demo, y dejar `main` para hitos. Se cambia en *Settings → General → Default branch*.
+> **Las ramas no aparecen en GitHub solas.** `git checkout -b develop` solo crea la rama en tu PC. En la web (pestaña *Branches*) verás únicamente las ramas que alguien haya subido con `git push -u origin <nombre>`. Si hoy solo ves `main`, es normal: falta el primer `push` de `develop` y de cada `{tu-nombre}`.
+
+> En GitHub conviene marcar **`develop` como rama por defecto** cuando ya exista en el remoto (*Settings → General → Default branch*).
 
 ### Rama personal: `{tu-nombre}`
 
@@ -159,7 +161,102 @@ Se abre PR hacia `develop` (desde `{tu-nombre}` o `chore/esqueleto`) y, al mezcl
 
 ## 3. Comandos paso a paso
 
-### Primera vez (clonar y quedarte en `develop`)
+### Cómo crear ramas **en el repositorio de GitHub** (léelo primero)
+
+GitHub solo lista ramas que existen en el remoto (`origin`). Resumen:
+
+| Dónde | Qué hace |
+|-------|----------|
+| `git branch` / `git checkout -b ...` | Crea o cambia ramas **solo en tu máquina** |
+| `git push -u origin <rama>` | **Crea o actualiza** esa rama en GitHub y la deja enlazada para siguientes `git push` |
+| Página *Branches* en GitHub | Muestra **solo** ramas que ya tienen `push` al remoto |
+
+**Comprobar en GitHub:** repo → botón que dice la rama actual (ej. `main`) → *View all branches*, o URL  
+`https://github.com/Nicolas-12000/Rapidos/branches`
+
+**Comprobar en terminal:**
+
+```bash
+git fetch origin
+git branch -r    # ramas en GitHub; si solo sale origin/main, develop aún no está subida
+```
+
+#### A) Puesta en marcha del repo (una vez por el equipo — quien administre el repo)
+
+Con el código ya en `main` en GitHub:
+
+```bash
+git clone https://github.com/Nicolas-12000/Rapidos.git
+cd rapidos
+git checkout main
+git pull origin main
+
+# 1) Crear develop EN GITHUB (no basta con crearla solo local)
+git checkout -b develop
+git push -u origin develop
+```
+
+Vuelve a *Branches*: debe aparecer **`develop`** junto a `main`.
+
+Opcional en GitHub: *Settings → General → Default branch* → cambiar a `develop` para que los clones nuevos apunten ahí.
+
+Quien use rama personal propia (ej. coordinación del esqueleto):
+
+```bash
+git checkout develop
+git pull origin develop
+git checkout -b Nicolas              # sustituye por {tu-nombre} si eres otro dev
+git push -u origin Nicolas           # ej.: git push -u origin Maria
+```
+
+Tras el `push`, la rama sale en la lista de GitHub.
+
+#### B) Cada desarrollador: crear **su** rama en GitHub
+
+**Opción 1 — Terminal (recomendada)**
+
+```bash
+git clone https://github.com/Nicolas-12000/Rapidos.git
+cd rapidos
+git fetch origin
+git checkout develop
+git pull origin develop
+
+git checkout -b Maria                # tu {tu-nombre}; solo la primera vez
+git push -u origin Maria             # ← esto crea la rama en GitHub
+```
+
+A partir de ahí, en esa rama: `git add` → `git commit` → `git push` (sin `-u` si ya enlazaste).
+
+**Opción 2 — Interfaz de GitHub**
+
+1. Repo → *Branches* → **New branch**.
+2. Nombre: tu `{tu-nombre}` (ej. `Pedro`).
+3. *Branch source:* **`develop`** (no `main`, salvo que `develop` aún no exista).
+4. *Create branch*.
+
+En tu PC:
+
+```bash
+git fetch origin
+git checkout -b Pedro origin/Pedro    # enlaza tu copia local con la rama del remoto
+```
+
+#### C) Ramas `feature/...` en GitHub
+
+Igual que la personal: créala desde `develop` local y súbela:
+
+```bash
+git checkout develop && git pull origin develop
+git checkout -b feature/catalogo-maria-menu
+git push -u origin feature/catalogo-maria-menu
+```
+
+En GitHub abres **Pull Request** de `feature/...` (o `{tu-nombre}`) **hacia `develop`**.
+
+---
+
+### Primera vez (clonar y trabajar en `develop`)
 
 ```bash
 git clone https://github.com/Nicolas-12000/Rapidos.git
@@ -169,11 +266,9 @@ git checkout develop
 git pull origin develop
 ```
 
-Si `develop` aún no existe en tu clon (solo `main`), pide a quien administre el repo que haya hecho `git push -u origin develop`, o créala tú desde `main` actualizado (ver abajo).
+Si `git checkout develop` falla con *pathspec 'develop' did not match*, **`develop` no está en GitHub todavía**. Quien administre el repo debe ejecutar el bloque **A)** de arriba (`git push -u origin develop`). Mientras tanto puedes clonar y quedarte en `main`, pero el flujo del equipo es integrar en `develop`.
 
-### Crear `develop` en GitHub (una sola vez, desde `main`)
-
-Quien tenga el repo local al día en `main`:
+### Crear `develop` en GitHub (referencia rápida)
 
 ```bash
 git checkout main
@@ -184,13 +279,13 @@ git push -u origin develop
 
 A partir de aquí **todo el equipo trabaja contra `origin/develop`**.
 
-### Crear tu rama `{tu-nombre}` desde `develop` (una vez por persona)
+### Crear tu rama `{tu-nombre}` en GitHub (referencia rápida)
 
 ```bash
 git checkout develop
 git pull origin develop
 git checkout -b {tu-nombre}          # ej.: git checkout -b Maria
-git push -u origin {tu-nombre}       # ej.: git push -u origin Maria
+git push -u origin {tu-nombre}       # ej.: git push -u origin Maria  ← obligatorio para verla en GitHub
 ```
 
 ### Crear tu rama de feature (cualquier dev)
