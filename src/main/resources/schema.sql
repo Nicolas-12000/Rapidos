@@ -40,4 +40,24 @@ CREATE TABLE IF NOT EXISTS pedido_linea (
 
 -- ===== despacho (Dev 3) =====
 
+CREATE TABLE IF NOT EXISTS despacho_pedido (
+    pedido_id       BIGINT      PRIMARY KEY REFERENCES pedido (id),
+    repartidor_id   BIGINT      NOT NULL,
+    estado          VARCHAR(20) NOT NULL CHECK (estado IN ('ASIGNADO', 'RECOGIDO', 'ENTREGADO')),
+    asignado_en     TIMESTAMPTZ NOT NULL,
+    actualizado_en  TIMESTAMPTZ NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS despacho_estado (
+    id              BIGSERIAL   PRIMARY KEY,
+    pedido_id       BIGINT      NOT NULL REFERENCES despacho_pedido (pedido_id),
+    repartidor_id   BIGINT      NOT NULL,
+    estado          VARCHAR(20) NOT NULL CHECK (estado IN ('ASIGNADO', 'RECOGIDO', 'ENTREGADO')),
+    llave_estado    VARCHAR(120) NOT NULL UNIQUE,
+    registrado_en   TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_despacho_estado_pedido
+    ON despacho_estado (pedido_id, registrado_en);
+
 -- ===== ubicacion: no usa base de datos (solo memoria) =====
