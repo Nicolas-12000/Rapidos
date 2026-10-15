@@ -1,24 +1,44 @@
 package com.rapidos.catalogo.internal;
 
+import java.time.Clock;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import com.rapidos.catalogo.CatalogoApi;
 import com.rapidos.catalogo.ItemMenu;
 
 /**
- * Implementación de CatalogoApi. Privada del módulo:
- * los demás módulos solo ven la interfaz CatalogoApi.
+ * Implementación de CatalogoApi con caché en memoria (ADR-001).
+ * Privada del módulo: los demás solo ven la interfaz CatalogoApi.
  */
 @Service
 class CatalogoService implements CatalogoApi {
 
-    private final CatalogoRepository repositorio;
+    private static final Logger log = LoggerFactory.getLogger(CatalogoService.class);
 
-    CatalogoService(CatalogoRepository repositorio) {
+    private final CatalogoRepository repositorio;
+    private final CacheConTtl<Long, List<ItemMenu>> menus;
+    private final CacheConTtl<Long, Boolean> activos;
+
+    /** Constructor que usa Spring. El TTL se puede cambiar en application.yml (por defecto 5 min). */
+    @Autowired
+    CatalogoService(CatalogoRepository repositorio,
+                    @Value("${rapidos.catalogo.cache-ttl:5m}") Duration ttl) {
+        this(repositorio, ttl, Clock.systemUTC());
+    }
+
+    /** Constructor para pruebas: permite controlar el reloj. */
+    CatalogoService(CatalogoRepository repositorio, Duration ttl, Clock clock) {
         this.repositorio = repositorio;
+        this.menus = new CacheConTtl<>(ttl, clock);
+        this.activos = new CacheConTtl<>(ttl, clock);
     }
 
     @Override
@@ -26,7 +46,7 @@ class CatalogoService implements CatalogoApi {
         if (restauranteId == null) {
             return false;
         }
-        return repositorio.restauranteActivo(restauranteId);
+        return activos.obtener(restauranteId, repositorio::restauranteActivo);
     }
 
     @Override
@@ -34,8 +54,7 @@ class CatalogoService implements CatalogoApi {
         if (restauranteId == null) {
             return List.of();
         }
-        // List.copyOf: lista inmutable, nadie puede modificarla por accidente
-        return List.copyOf(repositorio.menuDe(restauranteId));
+        return menus.obtener(restauranteId, this::cargarMenu);
     }
 
     @Override
@@ -43,9 +62,15 @@ class CatalogoService implements CatalogoApi {
         if (restauranteId == null || itemId == null) {
             return Optional.empty();
         }
-        // Busca dentro del menú de ESE restaurante: un plato de otro restaurante no aparece
+        // Sale de la caché: validar un pedido en el pico no toca la base de datos
         return menu(restauranteId).stream()
                 .filter(item -> item.id().equals(itemId))
                 .findFirst();
+    }
+
+    /** Solo se ejecuta cuando el menú no está en caché o ya venció. */
+    private List<ItemMenu> cargarMenu(Long restauranteId) {
+        log.info("Menú del restaurante {} cargado desde PostgreSQL (no estaba en caché)", restauranteId);
+        return List.copyOf(repositorio.menuDe(restauranteId));
     }
 }
