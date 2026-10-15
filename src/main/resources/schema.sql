@@ -2,6 +2,21 @@
 -- Usa CREATE TABLE IF NOT EXISTS para que se pueda ejecutar varias veces.
 
 -- ===== catalogo (Dev 2) =====
+CREATE TABLE IF NOT EXISTS restaurante (
+    id      BIGINT       PRIMARY KEY,
+    nombre  VARCHAR(120) NOT NULL,
+    activo  BOOLEAN      NOT NULL DEFAULT TRUE
+);
+
+CREATE TABLE IF NOT EXISTS item_menu (
+    id              BIGINT         PRIMARY KEY,
+    restaurante_id  BIGINT         NOT NULL REFERENCES restaurante (id),
+    nombre          VARCHAR(120)   NOT NULL,
+    precio          NUMERIC(12, 2) NOT NULL CHECK (precio > 0),
+    disponible      BOOLEAN        NOT NULL DEFAULT TRUE
+);
+
+CREATE INDEX IF NOT EXISTS idx_item_menu_restaurante ON item_menu (restaurante_id);
 
 -- ===== pedidos (Dev 1 + Dev 5) =====
 
