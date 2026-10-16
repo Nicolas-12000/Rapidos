@@ -1,10 +1,12 @@
 package com.rapidos.pedidos.internal;
 
 import com.rapidos.catalogo.CatalogoApi;
+import com.rapidos.catalogo.ItemMenu;
 import com.rapidos.pedidos.CrearPedidoComando;
 import com.rapidos.pedidos.LineaPedido;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -69,5 +71,16 @@ class PedidosServiceValidacionTest {
         assertThatThrownBy(() -> PedidosService.calcularTotal(comando, catalogo))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Ítem no válido: 99");
+    }
+
+    @Test
+    void rechazaUnItemNoDisponible() {
+        var agotado = new ItemMenu(3L, 1L, "Arepa de chócolo", new BigDecimal("9000.00"), false);
+        when(catalogo.obtenerItem(1L, 3L)).thenReturn(Optional.of(agotado));
+        var comando = new CrearPedidoComando(1L, 10L, List.of(new LineaPedido(3L, 1)));
+
+        assertThatThrownBy(() -> PedidosService.calcularTotal(comando, catalogo))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Ítem no disponible: 3");
     }
 }

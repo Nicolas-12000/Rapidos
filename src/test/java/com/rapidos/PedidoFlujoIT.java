@@ -92,6 +92,12 @@ class PedidoFlujoIT {
                 .matching(PedidoConfirmado::restauranteId, 1L);
         assertThat(confirmados).hasSize(1);
 
+        mockMvc.perform(get("/api/pedidos/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.total").value(24000.0))
+                .andExpect(jsonPath("$.estado").value("CONFIRMADO"));
+
         mockMvc.perform(get("/api/cola"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.pendientes").isNumber())
