@@ -1,0 +1,110 @@
+{
+  "info": {
+    "_postman_id": "f7a8b9c0-demo-e2e-rapidos-01",
+    "name": "Rapidos — Demo E2E (todos los módulos)",
+    "description": "Orden del README: menú → pedido → cola → estado → ubicación → mapa.\n\nImporta también el entorno `Rapidos-Local.postman_environment.json`.\nEjecuta con Collection Runner en este orden (carpetas = módulos).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1 Catálogo",
+      "item": [
+        {
+          "name": "GET menú",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/restaurantes/{{restauranteId}}/menu"
+          }
+        }
+      ]
+    },
+    {
+      "name": "2 Pedidos",
+      "item": [
+        {
+          "name": "POST crear pedido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  pm.environment.set('pedidoId', String(pm.response.json().id));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{idempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"restauranteId\": {{restauranteId}},\n  \"clienteId\": {{clienteId}},\n  \"items\": [{\"itemId\": {{itemId}}, \"cantidad\": 2}]\n}"
+            },
+            "url": "{{baseUrl}}/api/pedidos"
+          }
+        },
+        {
+          "name": "GET cola",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/cola"
+          }
+        },
+        {
+          "name": "GET pedido",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/pedidos/{{pedidoId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "3 Despacho",
+      "item": [
+        {
+          "name": "POST estado RECOGIDO",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pedidoId\": {{pedidoId}},\n  \"estado\": \"RECOGIDO\",\n  \"llave\": \"{{llaveEstado}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/repartidores/{{repartidorId}}/estado"
+          }
+        }
+      ]
+    },
+    {
+      "name": "4 Ubicación",
+      "item": [
+        {
+          "name": "PUT ubicación",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"lat\":1.2136,\"lon\":-77.2811}"
+            },
+            "url": "{{baseUrl}}/api/repartidores/{{repartidorId}}/ubicacion"
+          }
+        },
+        {
+          "name": "GET ubicación pedido",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/pedidos/{{pedidoId}}/ubicacion"
+          }
+        }
+      ]
+    }
+  ]
+}

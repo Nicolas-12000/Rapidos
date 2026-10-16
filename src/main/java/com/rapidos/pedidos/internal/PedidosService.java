@@ -103,6 +103,9 @@ class PedidosService implements PedidosApi {
             var item = catalogo
                     .obtenerItem(comando.restauranteId(), linea.itemId())
                     .orElseThrow(() -> new IllegalArgumentException("Ítem no válido: " + linea.itemId()));
+            if (!item.disponible()) {
+                throw new IllegalArgumentException("Ítem no disponible: " + linea.itemId());
+            }
             total = total.add(item.precio().multiply(BigDecimal.valueOf(linea.cantidad())));
         }
         return total;
