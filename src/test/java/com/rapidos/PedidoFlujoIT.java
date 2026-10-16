@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.modulith.test.AssertablePublishedEvents;
 import org.springframework.modulith.test.ApplicationModuleTest;
@@ -37,6 +37,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class PedidoFlujoIT {
 
     @Container
+    @SuppressWarnings("resource")
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
             .withDatabaseName("rapidos")
             .withUsername("rapidos")
@@ -49,7 +50,7 @@ class PedidoFlujoIT {
         registry.add("spring.datasource.password", postgres::getPassword);
     }
 
-    @MockBean
+    @MockitoBean
     CatalogoApi catalogo;
 
     @Autowired
@@ -91,6 +92,12 @@ class PedidoFlujoIT {
                 .matching(PedidoConfirmado::pedidoId, 1L)
                 .matching(PedidoConfirmado::restauranteId, 1L);
         assertThat(confirmados).hasSize(1);
+
+        mockMvc.perform(get("/api/pedidos/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.total").value(24000.0))
+                .andExpect(jsonPath("$.estado").value("CONFIRMADO"));
 
         mockMvc.perform(get("/api/cola"))
                 .andExpect(status().isOk())

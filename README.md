@@ -193,6 +193,9 @@ docker compose up -d
 # 3. Arrancar la aplicación
 ./mvnw spring-boot:run
 
+# (opcional) Postman: importar postman/Rapidos-Local.postman_environment.json y las colecciones por módulo
+# (Catálogo, Pedidos, Despacho, Ubicación) o postman/Rapidos-Demo-E2E.postman_collection.json para el flujo completo
+
 # (opcional) construir la imagen de contenedor
 docker build -t rapidos .
 

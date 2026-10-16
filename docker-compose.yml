@@ -1,4 +1,16 @@
 services:
+  app:
+    build: .
+    container_name: rapidos-app
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/rapidos
+      SPRING_DATASOURCE_USERNAME: rapidos
+      SPRING_DATASOURCE_PASSWORD: rapidos
+    depends_on:
+      - postgres
+
   postgres:
     image: postgres:16
     container_name: rapidos-db

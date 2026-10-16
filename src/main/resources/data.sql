@@ -15,3 +15,6 @@ INSERT INTO item_menu (id, restaurante_id, nombre, precio, disponible) VALUES
     (4, 2, 'Pizza hawaiana mediana',   32000.00, TRUE),
     (5, 2, 'Pizza pepperoni mediana',  34000.00, TRUE)
 ON CONFLICT (id) DO NOTHING;
+
+-- ===== pedidos (Dev 1 + Dev 5) =====
+-- Sin datos iniciales: los pedidos se crean por API (POST /api/pedidos).
