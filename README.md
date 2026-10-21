@@ -36,45 +36,43 @@ La demo debe mostrar, de punta a punta, que:
 
 ---
 
-## 2. Arquitectura: monolito modular
+## 2. Arquitectura: tres módulos, hexagonal
 
-Cuatro módulos de negocio. Cada uno expone una **API mínima** en su paquete raíz y esconde su implementación en `internal`.
+La rama `Hexagonal-Main` deja tres módulos. El menú y el cobro no son módulos: son puertos de `pedidos`. El reparto y las ramas están en `RAMAS.md`.
 
 ```mermaid
 graph LR
     despacho --> pedidos
     ubicacion --> pedidos
     ubicacion --> despacho
-    pedidos --> catalogo
 ```
 
 | Módulo | Responsabilidad | Depende de |
 |--------|-----------------|------------|
-| `catalogo` | Restaurantes y menú, con caché en memoria | — |
-| `pedidos` (orquestador) | Crear pedido, validar contra el menú, cobro simulado, idempotencia, publicar `PedidoConfirmado` | `catalogo` |
+| `pedidos` (orquestador) | Crear pedido, menú con caché, cobro simulado, idempotencia, publicar `PedidoConfirmado` | — |
 | `despacho` | Asigna repartidor, aviso al restaurante/repartidor (worker), estados de entrega con llave única | `pedidos` (evento) |
-| `ubicacion` | Última posición GPS por repartidor (TTL), lectura por el cliente, degradación de frecuencia | `pedidos` (evento), `despacho` (API) |
+| `ubicacion` | Última posición GPS por repartidor (TTL), lectura por el cliente, degradación de frecuencia | `pedidos` (evento), `despacho` (`ConsultaRepartidor`) |
 
 Los grafos no tienen ciclos. `pedidos` **no** conoce a `despacho` ni a `ubicacion`: se comunica con ellos solo publicando eventos.
 
 ### Reglas de frontera (Spring Modulith)
 
-1. Otros módulos solo dependen de tipos del **paquete raíz** del módulo (`XxxApi`, records, eventos), **nunca** de `*.internal.*`.
-2. La implementación vive en `internal`, con clases *package-private* + `@Service`.
-3. Llamadas **síncronas** por API pública; eventos (`@ApplicationModuleListener`) solo donde el ADR habla de cola (aviso a restaurante/repartidor, medición de latencia).
+1. Otro módulo solo depende de tipos del **paquete raíz**: eventos (`PedidoConfirmado`, `ConfirmacionMedida`) y `ConsultaRepartidor`. No entra a `dominio`, `aplicacion` ni `infraestructura` ajenos.
+2. Dentro del módulo, el servicio habla con puertos. JDBC, caché, HTTP y listeners viven en `infraestructura`.
+3. Llamadas entre módulos: eventos donde el ADR habla de cola (aviso al repartidor, medición de latencia). El menú y el cobro no cruzan de módulo: son puertos de `pedidos`.
 4. Sin dependencias circulares. `ApplicationModules.of(RapidosApplication.class).verify()` debe pasar.
 
 ### Capacidad del documento → módulo → API pública
 
 | Capacidad (ADR) | Módulo | API pública |
 |-----------------|--------|-------------|
-| Menú servido desde caché (ADR-001) | `catalogo` | `CatalogoApi.menu(...)`, `CatalogoApi.obtenerItem(...)` |
-| Guardar pedido y confirmar de inmediato (ADR-001) | `pedidos` | `PedidosApi.crear(...)`, `PedidosApi.consultar(...)` |
-| Idempotencia por pedido (ADR-001) | `pedidos` | cabecera `Idempotency-Key` en `PedidosApi.crear` |
+| Menú servido desde caché (ADR-001) | `pedidos` | `ConsultarMenuUseCase.menu(...)`; el orquestador usa `MenuPort` |
+| Guardar pedido y confirmar de inmediato (ADR-001) | `pedidos` | `CrearPedidoUseCase.crear(...)`, `ConsultarPedidoUseCase.consultar(...)` |
+| Idempotencia por pedido (ADR-001) | `pedidos` | cabecera `Idempotency-Key` en `CrearPedidoUseCase.crear` |
 | Publicar en cola / avisar a restaurante y repartidor (ADR-001) | `pedidos` → `despacho` | evento `PedidoConfirmado` |
-| Estados confiables con llave única (ADR-003) | `despacho` | `DespachoApi.registrarEstado(...)` |
-| Ubicación: última posición con TTL (ADR-002/003) | `ubicacion` | `UbicacionApi.reportar(...)`, `UbicacionApi.ultimaDePedido(...)` |
-| Degradación 5 s → 10 s → 15 s (ADR-002) | `ubicacion` | `UbicacionApi.frecuenciaSugeridaSegundos()`; escucha `ConfirmacionMedida` |
+| Estados confiables con llave única (ADR-003) | `despacho` | `RegistrarEstadoUseCase.registrarEstado(...)` |
+| Ubicación: última posición con TTL (ADR-002/003) | `ubicacion` | `ReportarUbicacionUseCase.reportar(...)`, `ultimaDePedido(...)` |
+| Degradación 5 s → 10 s → 15 s (ADR-002) | `ubicacion` | `frecuenciaSugeridaSegundos()`; escucha `ConfirmacionMedida` |
 
 ---
 
@@ -146,24 +144,17 @@ rapidos/
 └── src/
     ├── main/java/com/rapidos/
     │   ├── RapidosApplication.java
-    │   ├── catalogo/
-    │   │   ├── CatalogoApi.java            (API pública)
-    │   │   ├── ItemMenu.java               (record público)
-    │   │   └── internal/                   (servicio, repositorio, caché, controlador)
-    │   ├── pedidos/
-    │   │   ├── PedidosApi.java
-    │   │   ├── PedidoResumen.java
-    │   │   ├── PedidoConfirmado.java       (evento)
-    │   │   ├── ConfirmacionMedida.java     (evento)
-    │   │   └── internal/
+    │   ├── pedidos/                        (orquestador)
+    │   │   ├── PedidoConfirmado.java       (evento que escucha despacho)
+    │   │   ├── ConfirmacionMedida.java     (evento que escucha ubicacion)
+    │   │   ├── dominio/                    (pedido y menu)
+    │   │   ├── aplicacion/                 (casos de uso, MenuPort, Cobro)
+    │   │   └── infraestructura/            (PedidosController, JDBC, caché)
     │   ├── despacho/
-    │   │   ├── DespachoApi.java
-    │   │   ├── EstadoEntrega.java
-    │   │   └── internal/
+    │   │   ├── ConsultaRepartidor.java     (lo único que ve ubicacion)
+    │   │   └── dominio, aplicacion, infraestructura
     │   └── ubicacion/
-    │       ├── UbicacionApi.java
-    │       ├── UbicacionActual.java
-    │       └── internal/
+    │       └── dominio, aplicacion, infraestructura
     ├── main/resources/
     │   ├── application.yml
     │   ├── schema.sql
