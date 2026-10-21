@@ -1,418 +1,363 @@
-# RAMAS.md — Guía de ramas y reparto de trabajo (Rapidos)
+# RAMAS.md — Arquitectura hexagonal y ramas (Rapidos)
 
-Equipo: **5 desarrolladores (Dev 1 … Dev 5)**.
-Regla de reparto: **un módulo lo trabajan 2 personas; los otros módulos, una persona cada uno.**
+Equipo: **5 personas**. Cada una trabaja en su rama hexagonal. El código de Spring Modulith que ya está en `main`, `develop` y `Nicolas` no se toca.
 
----
+| Persona | Rol | Rama | PR hacia |
+|---------|-----|------|----------|
+| Nicolás | Dev 1, orquestador de `pedidos` | `Nicolas-Hexagonal` | `develop-Hexagonal` |
+| Esteban | Dev 2, menú dentro de `pedidos` | `esteban-Hexagonal` | `develop-Hexagonal` |
+| Matheu | Dev 3, `despacho` | `matheu-Hexagonal` | `develop-Hexagonal` |
+| Pipe | Dev 4, `ubicacion` | `pipe-Hexagonal` | `develop-Hexagonal` |
+| Gio | Dev 5, DTOs, SQL y pruebas del pedido | `Gio-Hexagonal` | `develop-Hexagonal` |
 
-## 1. Reparto de módulos
+Esta guía es la **línea hexagonal**. Vive en `Hexagonal-Main`. El trabajo del día se junta en `develop-Hexagonal`. De ahí sale la rama de cada persona. Esas ramas ya existen: no se crean otra vez desde `main`.
 
-| Módulo | Personas | Por qué |
-|--------|----------|---------|
-| `pedidos` (orquestador) | **Dev 1 + Dev 5** (en pareja) | Es el módulo más grande y el corazón del flujo. Dev 1 guía; Dev 5 toma tareas pequeñas y bien acotadas |
-| `catalogo` | **Dev 2** | Independiente, con poco riesgo. Menú + caché |
-| `despacho` | **Dev 3** | Estados con llave única, worker que avisa, asignación de repartidor |
-| `ubicacion` | **Dev 4** | GPS en memoria con TTL + regla de degradación |
-
-> Cambia "Dev 1..5" por los nombres reales. Si Dev 5 prefiere otro módulo, el que importa es que **el módulo en pareja sea el de mayor tamaño**.
-
-### Quién depende de quién
-
-```
-despacho  ──► pedidos ──► catalogo
-ubicacion ──► pedidos
-ubicacion ──► despacho
-```
-
-Esto define el **orden natural de trabajo**: `catalogo` y `pedidos` son la base; `despacho` y `ubicacion` se apoyan en ellos.
-
-### Tareas por persona
-
-**Dev 1 (pedidos, líder del módulo)**
-- `PedidosApi`, `PedidoResumen`, eventos `PedidoConfirmado` y `ConfirmacionMedida`.
-- Crear pedido: validar contra `CatalogoApi`, calcular total, cobro simulado, idempotencia (`Idempotency-Key`).
-- Publicar `PedidoConfirmado` en la misma transacción que guarda el pedido (cola persistente con `spring-modulith-starter-jdbc`) y medir la duración de la confirmación (`ConfirmacionMedida`).
-- `GET /api/cola`: cantidad de eventos pendientes (usa `IncompleteEventPublications` de Spring Modulith).
-- Controlador `POST /api/pedidos` y `GET /api/pedidos/{id}`.
-- Test de integración `PedidoFlujoIT`.
-
-**Dev 5 (pedidos, en pareja con Dev 1)**
-Tareas pensadas :
-1. DTOs de entrada/salida (`CrearPedidoRequest`, validaciones `@NotNull`, `@Min`).
-2. `schema.sql` y `data.sql` de la tabla de pedidos (con orientación de Dev 1).
-3. Pruebas unitarias de las reglas simples (total del pedido, cantidad mínima).
-4. Mantener el ejemplo de `curl` del README funcionando.
-5. Revisar el `Dockerfile` ya incluido: construir la imagen (`docker build -t rapidos .`) y comprobar que la app arranca en contenedor.
-6. Revisar los Pull Requests de sus compañeros (aprende leyendo código).
-
-**Dev 2 (catalogo)**
-- `CatalogoApi`, `ItemMenu`.
-- Tablas `restaurante` y `item_menu` + datos de ejemplo.
-- Caché en memoria del menú (ADR-001, complemento C).
-- `GET /api/restaurantes/{id}/menu`.
-- **Entregar la interfaz `CatalogoApi` el primer día**, porque `pedidos` la necesita.
-
-**Dev 3 (despacho)**
-- `DespachoApi`, `EstadoEntrega` (`ASIGNADO`, `RECOGIDO`, `ENTREGADO`).
-- `@ApplicationModuleListener` de `PedidoConfirmado` (worker): asigna repartidor y "avisa" por consola (restaurante + repartidor).
-- El worker debe ser **idempotente**: guarda una llave única por pedido; si el evento llega dos veces, no procesa doble.
-- Configurar `@EnableAsync` y un `ThreadPoolTaskExecutor` acotado con los valores `rapidos.workers.*` de `application.yml` (el "tope de instancias" del ADR-001).
-- Prueba: forzar un fallo en el worker y comprobar que el evento se reintenta y el pedido se procesa una sola vez.
-- Estados con llave única: la misma llave no se procesa dos veces (ADR-003).
-- `POST /api/repartidores/{id}/estado`.
-
-**Dev 4 (ubicacion)**
-- `UbicacionApi`, `UbicacionActual`.
-- Almacén en memoria con vencimiento (TTL): solo la última posición por repartidor, **sin base de datos de pedidos**.
-- `ReglaDegradacionGps`: escucha `ConfirmacionMedida`; 5 s → 10 s → 15 s y regreso a 5 s.
-- `PUT /api/repartidores/{id}/ubicacion` y `GET /api/pedidos/{id}/ubicacion`.
-- Prueba de carga con `carga/pedidos.js` (k6): validar p95 < 2 s y 0 % de rechazos, y comprobar que la frecuencia del GPS sube a 10 s bajo presión. Reporta los resultados a Dev 1.
+El ejemplo es `carnaval-tickets-st`. En la rama `02-dominio` había varios módulos (`inventario`, `pagos`, `notificaciones`, `pedidos`) que solo eran pasos de una misma compra. En `03-adaptadores` se unieron en `reservas`: cada paso quedó como puerto (`InventarioRepository`, `PasarelaDePagos`, `Notificador`) y hay un controlador. Eso mismo hacemos con lo que es un paso de confirmar el pedido. No copiamos el salto a un solo módulo: despacho y ubicación tienen otra consistencia y se quedan aparte.
 
 ---
 
-## 2. Flujo de ramas
-
-Todo el código del equipo **vive en GitHub** en ramas remotas (`origin`). La regla simple:
-
-1. **`main`** — solo entregas estables (demo lista, tags de entrega).
-2. **`develop`** — **aquí se integra todo el trabajo del día a día.** Nadie acumula el proyecto solo en `main`.
-3. **Tu rama personal** — partes de `develop`, trabajas, abres PR **hacia `develop`**, y cuando se aprueba borras o sigues en la misma rama para la siguiente tarea.
+## 1. Ramas
 
 ```
-main          ●────────────────────────────●  (release / entrega)
-               \                          /
-develop         ●──●──●──●──●──●──●──●──●  (integración continua)
-                     \    /      /
-{tu-nombre}           ●──●──●──●           (rama personal de cada dev)
-feature/...              ●──●              (tareas cortas, opcional)
+main, develop, Nicolas   (Modulith; esta línea no vuelve ahí)
+        \
+Hexagonal-Main        ●────────────────────────────●   entrega estable
+                       \                          /
+develop-Hexagonal       ●──●──●──●──●──●──●──●──●      aquí se junta el trabajo
+                             \    \    \    \    \
+Nicolas-Hexagonal            ●    ·    ·    ·    ·     Nicolás, Dev 1
+esteban-Hexagonal                 ●    ·    ·    ·     Esteban, Dev 2
+matheu-Hexagonal                       ●    ·    ·     Matheu, Dev 3
+pipe-Hexagonal                              ●    ·     Pipe, Dev 4
+Gio-Hexagonal                                    ●     Gio, Dev 5
 ```
 
-### Ramas permanentes (en GitHub)
+| Rama | De dónde sale | Hacia dónde va el PR |
+|------|----------------|----------------------|
+| `Hexagonal-Main` | Una vez, desde `main` | Solo recibe `develop-Hexagonal` cuando hay entrega |
+| `develop-Hexagonal` | Desde `Hexagonal-Main` | Recibe el PR de cada persona |
+| `Nicolas-Hexagonal` | Desde `develop-Hexagonal` | PR hacia `develop-Hexagonal` |
+| `esteban-Hexagonal` | Desde `develop-Hexagonal` | PR hacia `develop-Hexagonal` |
+| `matheu-Hexagonal` | Desde `develop-Hexagonal` | PR hacia `develop-Hexagonal` |
+| `pipe-Hexagonal` | Desde `develop-Hexagonal` | PR hacia `develop-Hexagonal` |
+| `Gio-Hexagonal` | Desde `develop-Hexagonal` | PR hacia `develop-Hexagonal` |
 
-| Rama | Dónde existe | Uso |
-|------|----------------|-----|
-| `main` | `origin/main` | Estable y entregable. Solo recibe merges desde `develop` (o release), no commits directos |
-| `develop` | `origin/develop` | **Rama de integración.** Todo el equipo sube trabajo aquí vía Pull Request |
+Una rama por persona. No se comparte. No se abre desde `main` ni desde el `develop` de Modulith. No se hace push directo a `develop-Hexagonal` ni a `Hexagonal-Main`.
 
-> **Las ramas no aparecen en GitHub solas.** `git checkout -b develop` solo crea la rama en tu PC. En la web (pestaña *Branches*) verás únicamente las ramas que alguien haya subido con `git push -u origin <nombre>`. Si hoy solo ves `main`, es normal: falta el primer `push` de `develop` y de cada `{tu-nombre}`.
-
-> En GitHub conviene marcar **`develop` como rama por defecto** cuando ya exista en el remoto (*Settings → General → Default branch*).
-
-### Rama personal: `{tu-nombre}`
-
-Cada desarrollador tiene **su propia rama en GitHub**, con un nombre corto y reconocible (por ejemplo el primer nombre: `Maria`, `Juan`, `Nicolas`). Sustituye `{tu-nombre}` por el tuyo en todos los comandos.
-
-La rama personal **siempre se crea a partir de `develop`**, no de `main`:
-
-```bash
-git fetch origin
-git checkout develop
-git pull origin develop
-git checkout -b {tu-nombre}    # primera vez; ej.: git checkout -b Maria
-# o, si ya existe en GitHub:
-git checkout {tu-nombre}
-git pull origin {tu-nombre}
-```
-
-Desde tu rama `{tu-nombre}` puedes:
-
-- Acumular varios commits de tu módulo antes de integrar.
-- Abrir PR **`{tu-nombre}` → `develop`** cuando quieras mezclar un bloque de cambios.
-- O usar además ramas `feature/...` por tarea (abajo); lo importante es que **todo termina en `develop` por PR**.
-
-> **Convención del equipo:** una rama `{tu-nombre}` por persona en `origin`. No compartáis la misma rama personal entre dos devs.
-
-### Ramas de trabajo (una por persona o por tarea)
-
-Formato recomendado para tareas acotadas: `feature/<modulo>-<nombre>-<descripcion-corta>`
-
-| Persona | Rama en GitHub (ejemplo) |
-|---------|---------------------------|
-| Cualquier dev | `{tu-nombre}` — rama personal (ej. `Nicolas`, `Maria`, `Pedro`) |
-| Dev 1 | `{tu-nombre}` y/o `feature/pedidos-dev1-crear-pedido` |
-| Dev 5 | `{tu-nombre}` y/o `feature/pedidos-dev5-dtos-y-validaciones` |
-| Dev 2 | `{tu-nombre}` y/o `feature/catalogo-dev2-menu-y-cache` |
-| Dev 3 | `{tu-nombre}` y/o `feature/despacho-dev3-estados` |
-| Dev 4 | `{tu-nombre}` y/o `feature/ubicacion-dev4-gps-y-degradacion` |
-
-Otros prefijos: `fix/` correcciones, `docs/` documentación, `chore/` configuración.
-
-**Flujo estándar (todos):**
-
-```text
-develop  →  tu-rama  →  commits + push  →  Pull Request → develop  →  (más adelante) main
-```
-
-- **No** hagas `push` directo a `develop` ni a `main` si el equipo usa PR (regla en sección 4).
-- **Sí** haz `git push -u origin <tu-rama>` para que la rama exista en GitHub.
-
-### Paso 0: esqueleto común (antes de que todos empiecen)
-
-Una sola persona (Dev 1) crea la rama `chore/esqueleto` con:
-- `pom.xml` (Spring Boot, Spring Modulith, PostgreSQL, Validation, Test).
-- `docker-compose.yml` y `application.yml`.
-- `RapidosApplication` y los **4 paquetes de módulo vacíos**.
-- Las **interfaces públicas** (`CatalogoApi`, `PedidosApi`, `DespachoApi`, `UbicacionApi`) y los records/eventos, aunque sin implementación.
-- `ModulosTest` con `verify()`.
-
-Se abre PR hacia `develop` (desde `{tu-nombre}` o `chore/esqueleto`) y, al mezclarse, **solo entonces** el resto crea o actualiza su rama desde `develop`. Así nadie pelea por los mismos archivos y los contratos entre módulos quedan claros desde el inicio.
+`develop` y `Nicolas`, sin el sufijo `-Hexagonal`, son la línea Modulith. Un push a esas dos pisa el trabajo anterior.
 
 ---
 
-## 3. Comandos paso a paso
+## 2. Tres módulos
 
-### Cómo crear ramas **en el repositorio de GitHub** (léelo primero)
+| Módulo | Qué incluye | Por qué es un módulo |
+|--------|-------------|----------------------|
+| `pedidos` | Confirmar el pedido. El menú y el cobro son puertos de salida, como inventario y pagos en carnaval | Misma transacción, misma base, el caso de uso que tiene que responder ya |
+| `despacho` | Asignar repartidor, avisar, estados con llave única | Canal asíncrono. Un fallo aquí no deshace el pedido (ADR-001, ADR-003) |
+| `ubicacion` | Última posición en memoria y degradación del GPS | Otra consistencia: se puede descartar y no puede tumbar el pedido (ADR-002) |
 
-GitHub solo lista ramas que existen en el remoto (`origin`). Resumen:
+No existe el módulo `catalogo`. El menú vive dentro de `pedidos`. No existe un módulo de cobro: `Cobro` es un puerto de salida con un adaptador simulado.
 
-| Dónde | Qué hace |
-|-------|----------|
-| `git branch` / `git checkout -b ...` | Crea o cambia ramas **solo en tu máquina** |
-| `git push -u origin <rama>` | **Crea o actualiza** esa rama en GitHub y la deja enlazada para siguientes `git push` |
-| Página *Branches* en GitHub | Muestra **solo** ramas que ya tienen `push` al remoto |
+```
+cliente ──HTTP──► entrada de pedidos
+                      │
+                      ▼
+                 CrearPedidoService          ← orquesta
+                   │         │          │
+              MenuPort     Cobro    PublicadorDeEventos
+                   │         │          │
+                   ▼         ▼          ├──► despacho (listener, no HTTP)
+              adaptador   adaptador     └──► ubicacion (listener, no HTTP)
+              menú+caché  simulado
 
-**Comprobar en GitHub:** repo → botón que dice la rama actual (ej. `main`) → *View all branches*, o URL  
-`https://github.com/Nicolas-12000/Rapidos/branches`
-
-**Comprobar en terminal:**
-
-```bash
-git fetch origin
-git branch -r    # ramas en GitHub; si solo sale origin/main, develop aún no está subida
+repartidor ──HTTP──► DespachoController      solo para reportar el estado
+repartidor ──HTTP──► UbicacionController     solo para mandar el GPS
+cliente    ──HTTP──► UbicacionController     solo para leer la última posición
 ```
 
-#### A) Puesta en marcha del repo (una vez por el equipo — quien administre el repo)
+`pedidos` no importa clases de `despacho` ni de `ubicacion`. Publica `PedidoConfirmado` y `ConfirmacionMedida`. Esos dos escuchan. `ubicacion`, para saber qué repartidor lleva un pedido, usa un puerto hacia `despacho`, no un `RestController`.
 
-Con el código ya en `main` en GitHub:
+`CrearPedidoService` tampoco llama al HTTP del menú. Pregunta `MenuPort`. El `GET` del menú existe porque el cliente lo consulta antes de pedir, y ese adaptador de entrada también está en `pedidos`.
 
-```bash
-git clone https://github.com/Nicolas-12000/Rapidos.git
-cd rapidos
-git checkout main
-git pull origin main
+### Controladores que sí existen
 
-# 1) Crear develop EN GITHUB (no basta con crearla solo local)
-git checkout -b develop
-git push -u origin develop
-```
+Uno por actor de afuera. Varios métodos en el mismo controlador están bien (en carnaval, crear y pagar viven en `ReservaController`). Un controlador para que un módulo llame a otro, no.
 
-Vuelve a *Branches*: debe aparecer **`develop`** junto a `main`.
+| Controlador | Dónde vive | Métodos | Quién lo llama | Quién lo escribe |
+|-------------|------------|---------|----------------|------------------|
+| `PedidosController` | `pedidos` | `POST /api/pedidos`, `GET /api/pedidos/{id}`, `GET /api/cola`, `GET /api/restaurantes/{id}/menu` | El cliente y la alarma de la cola | Nicolás los tres primeros. Esteban el `GET` del menú, en este mismo controlador |
+| `DespachoController` | `despacho` | `POST /api/repartidores/{id}/estado` | El repartidor | Matheu |
+| `UbicacionController` | `ubicacion` | `PUT /api/repartidores/{id}/ubicacion`, `GET /api/pedidos/{id}/ubicacion` | El repartidor y el cliente | Pipe |
 
-Opcional en GitHub: *Settings → General → Default branch* → cambiar a `develop` para que los clones nuevos apunten ahí.
+El menú no tiene controlador propio ni módulo propio. `GET /api/cola` tampoco. Los dos métodos van en `PedidosController`.
 
-Quien use rama personal propia (ej. coordinación del esqueleto):
+### Lo que no es un controlador
 
-```bash
-git checkout develop
-git pull origin develop
-git checkout -b Nicolas              # sustituye por {tu-nombre} si eres otro dev
-git push -u origin Nicolas           # ej.: git push -u origin Maria
-```
+| Qué pasa | Cómo entra | Quién |
+|----------|------------|-------|
+| Validar plato, precio y restaurante activo | Puerto de salida `MenuPort` | Esteban lo implementa. Nicolás solo lo llama |
+| Cobrar | Puerto de salida `Cobro` | Adaptador simulado dentro de `pedidos` |
+| Avisar al restaurante y asignar repartidor | Listener de `PedidoConfirmado` | Matheu |
+| Bajar la frecuencia del GPS | Listener de `ConfirmacionMedida` | Pipe |
+| Saber el repartidor de un pedido | Puerto de salida hacia `despacho` | Pipe declara el puerto; Matheu lo cubre con su caso de uso |
 
-Tras el `push`, la rama sale en la lista de GitHub.
-
-#### B) Cada desarrollador: crear **su** rama en GitHub
-
-**Opción 1 — Terminal (recomendada)**
-
-```bash
-git clone https://github.com/Nicolas-12000/Rapidos.git
-cd rapidos
-git fetch origin
-git checkout develop
-git pull origin develop
-
-git checkout -b Maria                # tu {tu-nombre}; solo la primera vez
-git push -u origin Maria             # ← esto crea la rama en GitHub
-```
-
-A partir de ahí, en esa rama: `git add` → `git commit` → `git push` (sin `-u` si ya enlazaste).
-
-**Opción 2 — Interfaz de GitHub**
-
-1. Repo → *Branches* → **New branch**.
-2. Nombre: tu `{tu-nombre}` (ej. `Pedro`).
-3. *Branch source:* **`develop`** (no `main`, salvo que `develop` aún no exista).
-4. *Create branch*.
-
-En tu PC:
-
-```bash
-git fetch origin
-git checkout -b Pedro origin/Pedro    # enlaza tu copia local con la rama del remoto
-```
-
-#### C) Ramas `feature/...` en GitHub
-
-Igual que la personal: créala desde `develop` local y súbela:
-
-```bash
-git checkout develop && git pull origin develop
-git checkout -b feature/catalogo-maria-menu
-git push -u origin feature/catalogo-maria-menu
-```
-
-En GitHub abres **Pull Request** de `feature/...` (o `{tu-nombre}`) **hacia `develop`**.
+Si el único que va a llamar tu código es otro módulo, o el propio orquestador, no crees un controlador. Crea el puerto y el adaptador.
 
 ---
 
-### Primera vez (clonar y trabajar en `develop`)
+## 3. Forma de cada módulo
+
+Igual que `reservas` en carnaval:
+
+```
+com.rapidos.pedidos
+├── dominio/
+│   ├── pedido/                        Nicolás y Gio. Pedido, LineaPedido, total
+│   └── menu/                          Esteban. ItemMenu, restaurante activo
+├── aplicacion/
+│   ├── servicios/                     CrearPedidoService, ConsultarMenuService
+│   └── puertos/
+│       ├── entrada/                   CrearPedidoUseCase, ConsultarPedidoUseCase, ConsultarMenuUseCase
+│       └── salida/                    PedidoRepository, MenuPort, Cobro, PublicadorDeEventos, Reloj
+└── infraestructura/
+    ├── entrada/                       PedidosController
+    ├── salida/
+    │   ├── pedido/                    JDBC del pedido
+    │   ├── menu/                      tablas, datos y caché con TTL
+    │   ├── cobro/                     cobro simulado
+    │   └── eventos/                   cola detrás de PublicadorDeEventos
+    └── config/
+
+com.rapidos.despacho
+com.rapidos.ubicacion
+├── dominio/
+├── aplicacion/servicios + puertos/entrada + puertos/salida
+└── infraestructura/entrada + salida + config
+```
+
+1. `dominio` no importa `aplicacion` ni `infraestructura`.
+2. El servicio solo ve interfaces y dominio. `CrearPedidoService` ve `MenuPort`, no el adaptador de la caché.
+3. El adaptador implementa el puerto. La config los une, como `ReservasConfig`.
+4. Entre los tres módulos solo se cruza un puerto o un evento.
+5. Las pruebas del dominio y del servicio usan dobles en memoria, como `ReservarBoletasServiceTest`, sin Spring.
+
+---
+
+## 4. De quién es cada parte
+
+| Parte | Persona | Rama | Qué toca |
+|-------|---------|------|----------|
+| Caso de uso de `pedidos` | **Nicolás, Dev 1** | `Nicolas-Hexagonal` | Orquesta. Dominio del pedido, `CrearPedidoService`, `PedidosController` (pedido y cola), JDBC del pedido, publicación de eventos |
+| Menú, dentro de `pedidos` | **Esteban, Dev 2** | `esteban-Hexagonal` | `dominio/menu`, `ConsultarMenuUseCase`, `MenuPort`, `ConsultarMenuService`, adaptador con caché, y el `GET` del menú en `PedidosController` |
+| `despacho` | **Matheu, Dev 3** | `matheu-Hexagonal` | Estados con llave única y el listener del pedido confirmado |
+| `ubicacion` | **Pipe, Dev 4** | `pipe-Hexagonal` | Última posición en memoria y la regla de degradación |
+| Piezas acotadas de `pedidos` | **Gio, Dev 5** | `Gio-Hexagonal` | DTO, validaciones, SQL de pedidos, pruebas del total, `curl`, imagen Docker. No abre otro controlador |
+
+Nicolás, Esteban y Gio comparten el módulo `pedidos` y no los mismos paquetes. Esteban no entra a `dominio/pedido` ni al JDBC del pedido. Nicolás no entra a `infraestructura/salida/menu`. Si hace falta un método nuevo en `MenuPort`, lo acuerdan en un PR pequeño.
+
+---
+
+## 5. Paso a paso de cada persona
+
+Todos arrancan en la rama que ya tienen. No se crea otra.
+
+```bash
+git fetch origin
+git checkout develop-Hexagonal
+git pull origin develop-Hexagonal
+git checkout esteban-Hexagonal
+git merge develop-Hexagonal
+git push
+```
+
+Cambia `esteban-Hexagonal` por la tuya: `Nicolas-Hexagonal`, `matheu-Hexagonal`, `pipe-Hexagonal` o `Gio-Hexagonal`.
+
+Cada paso es un commit en tu rama y, cuando el paso cierra algo revisable, un PR a `develop-Hexagonal`. Antes del PR: `./mvnw test`.
+
+### Nicolás — Dev 1, orquestador (`pedidos`), rama `Nicolas-Hexagonal`
+
+1. El esqueleto va directo en `Hexagonal-Main`, sin rama aparte: carpetas de **tres** módulos (`pedidos`, `despacho`, `ubicacion`), con los subpaquetes de menú y pedido dentro de `pedidos`. Puertos `CrearPedidoUseCase`, `MenuPort`, `Cobro` y `PublicadorDeEventos`. Un controlador por módulo, solo el que llama alguien de afuera.
+2. Dominio en `dominio/pedido`: `Pedido`, `LineaPedido`, total, cantidad mínima.
+3. Puertos de entrada `CrearPedidoUseCase` y `ConsultarPedidoUseCase`. El servicio depende de `MenuPort` y de `Cobro`; no de clases de menú ni de un módulo `catalogo`.
+4. `CrearPedidoService`: valida con `MenuPort`, calcula el total, cobra, aplica la `Idempotency-Key`, guarda y publica `PedidoConfirmado` en la misma transacción. Mide `ConfirmacionMedida` y la publica por el mismo puerto de eventos.
+5. `PedidosController` con `POST /api/pedidos`, `GET /api/pedidos/{id}` y `GET /api/cola`. Deja el método del menú para Esteban, en este mismo controlador. No crees `CatalogoController` ni `ColaController`.
+6. JDBC detrás de `PedidoRepository`. La cola (`spring-modulith-starter-jdbc`) detrás de `PublicadorDeEventos`. El cobro simulado detrás de `Cobro`.
+7. Cuando los demás ya están en `develop-Hexagonal`, `PedidoFlujoIT`: el POST usa `MenuPort`, publica el evento y el listener de despacho avisa. Si el test pide el menú por HTTP para poder crear el pedido, está mal.
+
+### Gio — Dev 5, contigo en `pedidos`, rama `Gio-Hexagonal`
+
+Trabajas en pareja con Nicolás, en los paquetes del pedido. Tu rama es `Gio-Hexagonal` y sale de `develop-Hexagonal`. No abras un controlador ni un módulo nuevo.
+
+1. Lee el README (el `curl` del caso de uso) y, en carnaval, `ReservarBoletasUseCase`, `ReservarBoletasService` y `ReservaController`. El controlador no reserva: llama a `reservar`. Inventario y pagos entran como puertos, no como módulos.
+2. Arranca la app y ejecuta el `curl` de crear pedido. Anota qué JSON entra y qué JSON sale.
+3. `CrearPedidoRequest` y la línea del body, con `@NotNull` y `@Min`. Viven al lado del controlador. El dominio no lleva anotaciones de Bean Validation. Nicolás usa tu request dentro de `PedidosController`.
+4. `schema.sql` y `data.sql` de la tabla de pedidos. El menú (`restaurante`, `item_menu`) lo escribe Esteban. Revísalo con Nicolás antes del PR.
+5. Pruebas del dominio, sin Spring: el total de dos líneas y el rechazo cuando la cantidad es menor que 1. El menú, en esas pruebas, es un `MenuPort` falso.
+6. Deja el `curl` del README funcionando después de cada PR.
+7. `docker build -t rapidos .` y comprueba que el contenedor arranca.
+8. En los PR de los demás, mira una sola cosa: ¿apareció un módulo `catalogo`, o un controlador cuyo único cliente es otro módulo? Si sí, coméntalo.
+
+Commits pequeños. Si llevas un rato atascado, pregúntale a Nicolás antes de borrar nada.
+
+### Esteban — Dev 2, menú dentro de `pedidos`, rama `esteban-Hexagonal`
+
+Tu código va en `com.rapidos.pedidos`, paquetes `dominio/menu`, `ConsultarMenu*`, `MenuPort` e `infraestructura/salida/menu`. No crees `com.rapidos.catalogo`.
+
+1. Dominio: `ItemMenu` y si el restaurante está activo.
+2. `MenuPort` (`restauranteActivo`, `obtenerItem`) y `ConsultarMenuUseCase` (`menu`). **Mézclalos a `develop-Hexagonal` lo primero**, con métodos que ya se puedan llamar. Nicolás trabaja contra `MenuPort` aunque tu adaptador todavía no exista: mientras tanto usa un doble.
+3. `ConsultarMenuService`. Puertos de salida `MenuRepository` y `Reloj`.
+4. Tablas `restaurante` e `item_menu`, datos de ejemplo, y la caché en memoria con TTL detrás del repositorio (ADR-001). El servicio no sabe si el dato vino de caché o de la tabla.
+5. Agrega `GET /api/restaurantes/{id}/menu` a `PedidosController`. Ese método llama a `ConsultarMenuUseCase`. `CrearPedidoService` no pasa por ahí.
+6. Prueba del servicio con un repositorio falso: menú vacío, plato de otro restaurante, restaurante inactivo.
+
+### Matheu — Dev 3, `despacho`, rama `matheu-Hexagonal`
+
+1. Dominio: `EstadoEntrega` (`ASIGNADO`, `RECOGIDO`, `ENTREGADO`) y la regla de llave única (ADR-003). La misma llave no se aplica dos veces.
+2. Puerto de entrada `RegistrarEstadoUseCase`. Puertos de salida `DespachoRepository` y `Avisador`.
+3. Servicio: asignar repartidor al confirmar; registrar el estado que manda el repartidor.
+4. Entrada interna, sin HTTP: listener de `PedidoConfirmado`. Traduce el evento y llama al caso de uso. Si el worker falla, el evento se reintenta y el pedido queda procesado una sola vez. Prueba ese caso.
+5. Un controlador, `POST /api/repartidores/{id}/estado`, porque el repartidor está afuera. El aviso al restaurante y al repartidor es el adaptador de `Avisador` (consola), no un endpoint.
+6. En config: `@EnableAsync` y el `ThreadPoolTaskExecutor` con `rapidos.workers.*`.
+
+### Pipe — Dev 4, `ubicacion`, rama `pipe-Hexagonal`
+
+1. Dominio: `UbicacionActual` y `ReglaDegradacionGps` (5 s → 10 s → 15 s, y vuelta a 5 s).
+2. Puerto de entrada `ReportarUbicacionUseCase`. Puertos de salida: almacén en memoria, `Reloj`, y la lectura del repartidor del pedido (puerto hacia `despacho`, no HTTP).
+3. Servicio: solo la última posición por repartidor, con TTL. Sin tabla de pedidos (ADR-002).
+4. Entrada interna, sin HTTP: listener de `ConfirmacionMedida`, que mueve la frecuencia.
+5. Un controlador con dos métodos: `PUT /api/repartidores/{id}/ubicacion` (lo manda el repartidor) y `GET /api/pedidos/{id}/ubicacion` (lo lee el cliente).
+6. Con la app integrada, `k6 run carga/pedidos.js`: p95 < 2 s, 0 % de rechazos, y la frecuencia sube a 10 s bajo presión. Pásale los números a Nicolás.
+
+---
+
+## 6. Puesta en marcha de las ramas
+
+`Hexagonal-Main`, `develop-Hexagonal` y las cinco ramas personales ya están creadas. No se crea otra desde `main`.
 
 ```bash
 git clone https://github.com/Nicolas-12000/Rapidos.git
 cd rapidos
 git fetch origin
-git checkout develop
-git pull origin develop
+git checkout develop-Hexagonal
+git pull origin develop-Hexagonal
+git checkout esteban-Hexagonal
+git merge develop-Hexagonal
 ```
 
-Si `git checkout develop` falla con *pathspec 'develop' did not match*, **`develop` no está en GitHub todavía**. Quien administre el repo debe ejecutar el bloque **A)** de arriba (`git push -u origin develop`). Mientras tanto puedes clonar y quedarte en `main`, pero el flujo del equipo es integrar en `develop`.
+Esteban cambia el último `checkout` por su rama. Lo mismo Nicolás, Matheu, Pipe y Gio.
 
-### Crear `develop` en GitHub (referencia rápida)
+El `develop` y el `Nicolas` que ya están en GitHub son Modulith. No se les hace push desde esta línea.
+
+Comprobar: `https://github.com/Nicolas-12000/Rapidos/branches`
+
+En `develop-Hexagonal` ya se ve que el menú es un paquete de `pedidos`, no un cuarto módulo.
+
+### Día a día
 
 ```bash
-git checkout main
-git pull origin main
-git checkout -b develop
-git push -u origin develop
+git checkout develop-Hexagonal
+git pull origin develop-Hexagonal
+git checkout esteban-Hexagonal
+git merge develop-Hexagonal
+
+git add src/main/java/com/rapidos/pedidos/dominio/menu/
+git commit -m "feat(pedidos): publica MenuPort para el orquestador"
+git push
 ```
 
-A partir de aquí **todo el equipo trabaja contra `origin/develop`**.
+El PR en GitHub va de tu rama **hacia `develop-Hexagonal`**. Por ejemplo, `esteban-Hexagonal` → `develop-Hexagonal`.
 
-### Crear tu rama `{tu-nombre}` en GitHub (referencia rápida)
+Cuando una fase queda estable, Nicolás mezcla `develop-Hexagonal` en `Hexagonal-Main` y lo empuja. Ese merge no reemplaza los PR de cada tarea.
+
+### Si Git se enreda
 
 ```bash
-git checkout develop
-git pull origin develop
-git checkout -b {tu-nombre}          # ej.: git checkout -b Maria
-git push -u origin {tu-nombre}       # ej.: git push -u origin Maria  ← obligatorio para verla en GitHub
+git status
+git log --oneline -10
+git restore <archivo>          # deshace cambios que aún no están en un commit
+git stash                      # aparta cambios un momento
+git stash pop
+git merge --abort              # cancela un merge con conflictos
 ```
 
-### Crear tu rama de feature (cualquier dev)
-
-```bash
-git checkout develop
-git pull origin develop
-git checkout -b feature/catalogo-dev2-menu-y-cache
-git push -u origin feature/catalogo-dev2-menu-y-cache
-```
-
-### Trabajar y guardar cambios
-
-```bash
-git status                      # ver qué cambió
-git add src/main/java/com/rapidos/catalogo/
-git commit -m "feat(catalogo): agrega caché en memoria del menú"
-git push -u origin feature/catalogo-dev2-menu-y-cache
-```
-
-### Mantener tu rama al día (hazlo cada día)
-
-```bash
-git checkout develop
-git pull origin develop
-git checkout feature/catalogo-dev2-menu-y-cache
-git merge develop
-```
-
-Si hay conflictos, Git marca los archivos con `<<<<<<<`. Se abren, se decide qué queda, se hace `git add <archivo>` y `git commit`. **Si no entiendes un conflicto, pregunta antes de borrar nada.**
-
-### Abrir un Pull Request
-
-1. Sube tu rama (`git push`).
-2. En GitHub/GitLab: *New Pull Request* → de tu rama **hacia `develop`**.
-3. Pide revisión al menos a **una persona** (Dev 5 también puede revisar).
-4. Cuando lo aprueban y las pruebas pasan, se mezcla. Después se puede borrar la rama.
-
-### Cuando una tarea termina
-
-```bash
-git checkout develop
-git pull origin develop
-git branch -d feature/catalogo-dev2-menu-y-cache
-# y se crea una rama nueva para la siguiente tarea
-```
+No borres la carpeta del proyecto. Casi todo se recupera.
 
 ---
 
-## 4. Convenciones
+## 7. Cuando ya está todo: la orquestación
 
-### Commits (formato `tipo(modulo): mensaje`)
+El flujo lo cierra `CrearPedidoService`, no un controlador de integración. Con los PR en `develop-Hexagonal`, este es el camino de la demo:
 
-| Tipo | Cuándo |
-|------|--------|
-| `feat` | Funcionalidad nueva |
-| `fix` | Corrección de un error |
-| `test` | Pruebas |
-| `docs` | README, RAMAS, comentarios |
-| `chore` | Configuración, dependencias |
-| `refactor` | Cambio interno sin cambiar el comportamiento |
+1. El cliente pide el menú con `GET /api/restaurantes/{id}/menu`. Responde `PedidosController` llamando a `ConsultarMenuUseCase`. La caché está detrás de `MenuRepository`.
+2. El cliente hace `POST /api/pedidos` con `Idempotency-Key`. El mismo controlador llama a `CrearPedidoUseCase`.
+3. El servicio pregunta el plato a `MenuPort`, cobra por `Cobro`, guarda y publica `PedidoConfirmado`. La respuesta sale ya, sin esperar al repartidor.
+4. El listener de Matheu asigna repartidor y avisa por consola. Si llega el mismo evento otra vez, no duplica.
+5. `ConfirmacionMedida` llega al listener de Pipe y, si la confirmación se pone lenta, la frecuencia del GPS pasa a 10 s o 15 s.
+6. El repartidor hace `POST .../estado` y `PUT .../ubicacion` en los controladores de `despacho` y `ubicacion`.
+7. El cliente lee `GET /api/pedidos/{id}` y `GET /api/pedidos/{id}/ubicacion`.
+8. Repetir el POST con la misma llave devuelve el mismo pedido.
 
-Ejemplos: `feat(pedidos): valida idempotencia por llave`, `test(ubicacion): prueba degradación a 10 s`.
+`PedidoFlujoIT` recorre los pasos 2 a 4 por `PedidosController`, `MenuPort` y el listener de despacho. No aparece un módulo `catalogo` ni un controlador puente.
 
-### Reglas de oro del equipo
-
-1. **Trabaja solo dentro de tu módulo.** Si necesitas algo de otro módulo, usa su `XxxApi`.
-2. **Nunca importes `*.internal.*` de otro módulo.** `verify()` fallará.
-3. **Si necesitas cambiar una API pública**, avisa al dueño del módulo y haz un PR **pequeño solo con ese cambio**.
-4. **No hagas push directo a `develop` ni `main`.** Todo entra por Pull Request.
-5. **Antes de abrir un PR corre `./mvnw test`.** Si no pasa en tu máquina, no pasará en el equipo.
-6. **PR pequeños y frecuentes** (menos de ~300 líneas) son más fáciles de revisar que uno gigante.
-7. **No subas secretos reales.** Para la demo, las credenciales locales en `application.yml` están bien.
-
-### Lista de verificación antes de pedir revisión
-
-- [ ] `./mvnw test` pasa (incluido `ModulosTest`).
-- [ ] No hay imports a `internal` de otros módulos.
-- [ ] Solo toqué archivos de mi módulo (o lo hablé con el dueño).
-- [ ] El mensaje de commit sigue el formato.
-- [ ] Actualicé el README si cambié un endpoint.
+Si algo no cuadra al juntar, se arregla en un PR chico del dueño del puerto.
 
 ---
 
-## 5. Orden de trabajo sugerido
+## 8. Convenciones
 
-| Fase | Qué pasa | Quién |
-|------|----------|-------|
-| 0 | Esqueleto + interfaces públicas + `ModulosTest` | Dev 1 |
-| 1 | `catalogo` completo; `pedidos` con DTOs y validaciones | Dev 2; Dev 1 + Dev 5 |
-| 2 | `pedidos` crea pedido, publica `PedidoConfirmado` | Dev 1 + Dev 5 |
-| 3 | `despacho` escucha el evento y maneja estados; `ubicacion` guarda GPS | Dev 3; Dev 4 |
-| 4 | Worker idempotente con reintento (`despacho`), degradación del GPS, `PedidoFlujoIT` | Dev 3; Dev 4; Dev 1 |
-| 5 | Prueba de carga (`carga/pedidos.js`), `Dockerfile` verificado, README final, revisión conjunta | Dev 4 + Dev 5; todos |
+Commits: `tipo(modulo): mensaje`. Tipos: `feat`, `fix`, `test`, `docs`, `chore`, `refactor`.
 
-Mientras una dependencia no esté lista, usa un **stub** de su interfaz pública (por ejemplo un `CatalogoApi` falso en tus tests) y sigue avanzando.
+El módulo del commit es `pedidos`, `despacho` o `ubicacion`. El menú se commitea como `pedidos`.
 
----
+Ejemplo: `feat(pedidos): publica MenuPort para confirmar el pedido`.
 
-## 6. Guía para Dev 5
+### Reglas
 
-- Empieza leyendo el **README.md** y los **ADR** para entender el *porqué* antes del *cómo*.
-- Ejecuta el proyecto y prueba el `curl` de ejemplo antes de escribir código.
-- Trabaja siempre en pareja con Dev 1 las primeras tareas (*pair programming*): uno escribe, el otro lee y pregunta.
-- Haz commits pequeños; es más fácil deshacer un error pequeño.
-- **Preguntar es parte del trabajo.** Si llevas 30 minutos atascado, pide ayuda.
-- Revisar PRs de otros es una de las mejores formas de aprender; no hace falta encontrar errores, basta con preguntar "¿qué hace esto?".
-- Si algo sale mal con Git, no borres la carpeta: pide ayuda. Casi todo se puede recuperar (`git status`, `git log`, `git reflog`).
+1. Hay tres módulos. El menú y el cobro son puertos de `pedidos`.
+2. Otro módulo se usa por su puerto de entrada o por un evento, nunca por su controlador ni por su paquete de infraestructura.
+3. Dentro de `pedidos`, Nicolás no importa `infraestructura/salida/menu`. Usa `MenuPort`.
+4. No agregues un controlador si nadie de afuera del proceso lo va a llamar. El `GET` del menú y el de la cola viven en `PedidosController`.
+5. Un cambio de `MenuPort` se avisa y va en un PR pequeño. Esteban lo publica antes de que Nicolás lo conecte.
+6. Nada de push directo a `develop-Hexagonal`, `Hexagonal-Main`, `develop`, `Nicolas` o `main`.
+7. `./mvnw test` antes de pedir revisión.
+8. PR por debajo de ~300 líneas.
+9. Sin secretos reales. Las credenciales locales de la demo pueden quedarse en `application.yml`.
 
-### Comandos de rescate
+### Antes de pedir revisión
 
-```bash
-git status                       # dónde estoy y qué cambió
-git log --oneline -10            # últimos commits
-git restore <archivo>            # descartar cambios no guardados de un archivo
-git stash                        # guardar cambios a un lado temporalmente
-git stash pop                    # recuperarlos
-git merge --abort                # cancelar un merge con conflictos
-```
+- [ ] `./mvnw test` pasa.
+- [ ] `dominio` y `aplicacion` no importan `infraestructura`.
+- [ ] No apareció un módulo `catalogo` ni un controlador fuera de la tabla de la sección 2.
+- [ ] El controlador solo traduce HTTP y llama al caso de uso.
+- [ ] Solo toqué mis paquetes, o lo hablé con el dueño.
+- [ ] El PR apunta a `develop-Hexagonal`.
 
 ---
 
-## 7. Definición de "terminado" del proyecto
+## 9. Orden
 
-- [ ] `./mvnw test` pasa, incluido `verify()` de Modulith.
-- [ ] Ningún import entre módulos apunta a `*.internal.*`.
-- [ ] El caso de uso principal funciona contra PostgreSQL local (`docker compose up`).
-- [ ] Idempotencia, degradación del GPS, prioridad de estados y reintento de la cola tienen al menos una prueba cada una.
+| Fase | Qué queda en `develop-Hexagonal` | Quién |
+|------|------------------------|-------|
+| 0 | `Hexagonal-Main`, `develop-Hexagonal`, esqueleto de tres módulos y puertos (`MenuPort`, `Cobro`) | Nicolás |
+| 1 | `MenuPort` y `ConsultarMenuUseCase` usables. En el pedido: request, SQL y pruebas de total con un `MenuPort` falso | Esteban; Gio con Nicolás |
+| 2 | Crear pedido, publicar `PedidoConfirmado`, `PedidosController` (pedido, cola y, cuando Esteban lo agregue, el menú) | Nicolás; Gio deja el `curl` vivo |
+| 3 | Listener de despacho y estados. GPS en memoria y su controlador | Matheu; Pipe |
+| 4 | Reintento idempotente, degradación, `PedidoFlujoIT` | Matheu; Pipe; Nicolás |
+| 5 | k6, Dockerfile, README. Merge de `develop-Hexagonal` a `Hexagonal-Main` | Pipe y Gio; cierra Nicolás |
+
+Mientras `MenuPort` no tenga adaptador, usa un doble en las pruebas y sigue. No desbloquees el pedido con un HTTP al menú.
+
+---
+
+## 10. Terminado
+
+- [ ] `./mvnw test` pasa, incluido el `verify()` de los tres módulos.
+- [ ] `dominio` y `aplicacion` no importan `infraestructura`.
+- [ ] Los módulos son `pedidos`, `despacho` y `ubicacion`. No existe `catalogo`.
+- [ ] `CrearPedidoService` habla con el menú por `MenuPort` y con el cobro por `Cobro`.
+- [ ] Despacho y ubicación entran por eventos. Sus controladores solo los usa alguien de afuera.
+- [ ] `GET` del menú y `GET /api/cola` están en `PedidosController`.
+- [ ] El caso de uso corre contra PostgreSQL (`docker compose up`) y el `curl` del README responde.
+- [ ] Idempotencia, degradación del GPS, llave única de estados y reintento de la cola tienen cada uno una prueba.
 - [ ] `docker build -t rapidos .` funciona y `k6 run carga/pedidos.js` cumple p95 < 2 s y 0 % de rechazos.
-- [ ] El README y el diagrama generado en `target/spring-modulith-docs/` se entienden en 5 minutos.
+- [ ] `develop-Hexagonal` está mezclado en `Hexagonal-Main`.
