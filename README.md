@@ -8,7 +8,7 @@ Demo de **monolito modular** (Spring Boot + Spring Modulith + PostgreSQL) para u
 
 ## 1. Objetivo
 
-Entre las **7:00 y las 9:00 p. m. se factura el 70 % del día**. Si el sistema se satura en esa franja, el negocio pierde la mayor parte de sus ingresos. El equipo es de **5 desarrolladores (Dev 1 … Dev 5)** en este proyecto académico, así que se prefiere simplicidad y pocas piezas que operar.
+Entre las **7:00 y las 9:00 p. m. se factura el 70 % del día**. Si el sistema se satura en esa franja, el negocio pierde la mayor parte de sus ingresos. El equipo es Nicolás, Esteban, Matheu, Pipe y Gio, así que se prefiere simplicidad y pocas piezas que operar.
 
 La demo debe mostrar, de punta a punta, que:
 
@@ -38,7 +38,7 @@ La demo debe mostrar, de punta a punta, que:
 
 ## 2. Arquitectura: tres módulos, hexagonal
 
-La rama `Hexagonal-Main` deja tres módulos. El menú y el cobro no son módulos: son puertos de `pedidos`. El reparto y las ramas están en `RAMAS.md`.
+La rama `Hexagonal-Main` deja tres módulos. El menú y el cobro no son módulos: son puertos de `pedidos`. Quién hace cada parte, y en qué rama, está en `RAMAS.md`.
 
 ```mermaid
 graph LR
@@ -267,6 +267,16 @@ La respuesta de ubicación incluye `frecuenciaSugeridaSegundos` (5, 10 o 15) y l
 
 ---
 
-## 10. Equipo y flujo de trabajo
+## 10. Equipo y ramas
 
-Ver **[RAMAS.md](RAMAS.md)** para la división de módulos, el flujo de ramas Git y las guías de trabajo.
+La línea hexagonal no usa `develop` ni `Nicolas`. Esas dos ramas son Modulith.
+
+| Persona | Rol | Rama | PR hacia |
+|---------|-----|------|----------|
+| Nicolás | Dev 1, orquestador de `pedidos` | `Nicolas-Hexagonal` | `develop-Hexagonal` |
+| Esteban | Dev 2, menú dentro de `pedidos` | `esteban-Hexagonal` | `develop-Hexagonal` |
+| Matheu | Dev 3, `despacho` | `matheu-Hexagonal` | `develop-Hexagonal` |
+| Pipe | Dev 4, `ubicacion` | `pipe-Hexagonal` | `develop-Hexagonal` |
+| Gio | Dev 5, DTOs, SQL y pruebas del pedido | `Gio-Hexagonal` | `develop-Hexagonal` |
+
+`develop-Hexagonal` sale de `Hexagonal-Main` y junta los PR. El paso a paso de cada rama está en **[RAMAS.md](RAMAS.md)**.

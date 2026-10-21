@@ -2,6 +2,7 @@ package com.rapidos.pedidos.aplicacion.servicios;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Optional;
 
 import com.rapidos.pedidos.ConfirmacionMedida;
@@ -13,6 +14,7 @@ import com.rapidos.pedidos.aplicacion.puertos.salida.Cobro;
 import com.rapidos.pedidos.aplicacion.puertos.salida.MenuPort;
 import com.rapidos.pedidos.aplicacion.puertos.salida.PedidoRepository;
 import com.rapidos.pedidos.aplicacion.puertos.salida.PublicadorDeEventos;
+import com.rapidos.pedidos.dominio.pedido.Pedido;
 import com.rapidos.pedidos.dominio.pedido.PedidoResumen;
 
 public class CrearPedidoService implements CrearPedidoUseCase, ConsultarPedidoUseCase {
@@ -43,27 +45,32 @@ public class CrearPedidoService implements CrearPedidoUseCase, ConsultarPedidoUs
         if (existente.isPresent()) {
             return existente.get();
         }
-        validarComando(comando);
+        if (comando == null || comando.restauranteId() == null || comando.clienteId() == null) {
+            throw new IllegalArgumentException("restauranteId y clienteId son obligatorios");
+        }
+        if (comando.items() == null || comando.items().isEmpty()) {
+            throw new IllegalArgumentException("El pedido debe tener al menos un ítem");
+        }
         if (!menu.restauranteActivo(comando.restauranteId())) {
             throw new IllegalArgumentException("Restaurante no disponible");
         }
-        BigDecimal total = calcularTotal(comando);
-        if (!cobro.cobrar(comando.clienteId(), total)) {
+        Pedido pedido = armar(comando);
+        if (!cobro.cobrar(pedido.clienteId(), pedido.total())) {
             throw new IllegalStateException("Cobro rechazado");
         }
         var creadoEn = Instant.now();
         var resumen = pedidos.insertar(
-                comando.restauranteId(),
-                comando.clienteId(),
-                total,
+                pedido.restauranteId(),
+                pedido.clienteId(),
+                pedido.total(),
                 "CONFIRMADO",
                 creadoEn,
                 llavePedido.trim());
-        for (var linea : comando.items()) {
-            var item = menu
-                    .obtenerItem(comando.restauranteId(), linea.itemId())
-                    .orElseThrow(() -> new IllegalArgumentException("Ítem no válido: " + linea.itemId()));
-            pedidos.insertarLinea(resumen.id(), linea.itemId(), linea.cantidad(), item.precio());
+        var lineas = pedido.lineas();
+        var precios = pedido.preciosUnitarios();
+        for (int i = 0; i < lineas.size(); i++) {
+            var linea = lineas.get(i);
+            pedidos.insertarLinea(resumen.id(), linea.itemId(), linea.cantidad(), precios.get(i));
         }
         eventos.publicar(new PedidoConfirmado(resumen.id(), resumen.restauranteId(), resumen.total()));
         long duracionMs = (System.nanoTime() - inicio) / 1_000_000L;
@@ -76,31 +83,8 @@ public class CrearPedidoService implements CrearPedidoUseCase, ConsultarPedidoUs
         return pedidos.porId(pedidoId);
     }
 
-    private static void validarComando(CrearPedidoComando comando) {
-        if (comando.restauranteId() == null || comando.clienteId() == null) {
-            throw new IllegalArgumentException("restauranteId y clienteId son obligatorios");
-        }
-        if (comando.items() == null || comando.items().isEmpty()) {
-            throw new IllegalArgumentException("El pedido debe tener al menos un ítem");
-        }
-        for (var linea : comando.items()) {
-            if (linea.itemId() == null || linea.cantidad() < 1) {
-                throw new IllegalArgumentException("Cada línea requiere itemId y cantidad >= 1");
-            }
-        }
-    }
-
-    static BigDecimal calcularTotal(CrearPedidoComando comando, MenuPort menu) {
-        validarComando(comando);
-        return calcularTotalInterno(comando, menu);
-    }
-
-    private BigDecimal calcularTotal(CrearPedidoComando comando) {
-        return calcularTotalInterno(comando, menu);
-    }
-
-    private static BigDecimal calcularTotalInterno(CrearPedidoComando comando, MenuPort menu) {
-        BigDecimal total = BigDecimal.ZERO;
+    private Pedido armar(CrearPedidoComando comando) {
+        var precios = new ArrayList<BigDecimal>();
         for (var linea : comando.items()) {
             var item = menu
                     .obtenerItem(comando.restauranteId(), linea.itemId())
@@ -108,8 +92,8 @@ public class CrearPedidoService implements CrearPedidoUseCase, ConsultarPedidoUs
             if (!item.disponible()) {
                 throw new IllegalArgumentException("Ítem no disponible: " + linea.itemId());
             }
-            total = total.add(item.precio().multiply(BigDecimal.valueOf(linea.cantidad())));
+            precios.add(item.precio());
         }
-        return total;
+        return Pedido.confirmar(comando.restauranteId(), comando.clienteId(), comando.items(), precios);
     }
 }
