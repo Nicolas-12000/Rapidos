@@ -1,8 +1,8 @@
 package com.rapidos;
 
-import com.rapidos.catalogo.CatalogoApi;
-import com.rapidos.catalogo.ItemMenu;
 import com.rapidos.pedidos.PedidoConfirmado;
+import com.rapidos.pedidos.aplicacion.puertos.salida.MenuPort;
+import com.rapidos.pedidos.dominio.menu.ItemMenu;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -51,7 +51,7 @@ class PedidoFlujoIT {
     }
 
     @MockitoBean
-    CatalogoApi catalogo;
+    MenuPort catalogo;
 
     @Autowired
     MockMvc mockMvc;
