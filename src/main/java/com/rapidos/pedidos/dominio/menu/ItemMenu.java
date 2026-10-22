@@ -5,14 +5,14 @@ import java.math.BigDecimal;
 
 public class ItemMenu{
 
-    private final String id;
-    private final String restauranteId;
+    private final Long id;
+    private final Long restauranteId;
     private final String nombre;
     private final BigDecimal precio;
     private boolean disponible;
 
         
-    public ItemMenu(String id, String restauranteId, String nombre,  BigDecimal precio, boolean disponible){
+    private ItemMenu(Long id, Long restauranteId, String nombre,  BigDecimal precio, boolean disponible){
         this. id = id;
         this.restauranteId = restauranteId;
         this.nombre = nombre;
@@ -21,14 +21,14 @@ public class ItemMenu{
     }
 
 
-    public static void platoDisponible(String id, String restauranteId, BigDecimal precio, boolean disponible){
+    public static void platoDisponible(Long id, Long restauranteId, BigDecimal precio, boolean disponible){
         if(!disponible){
             throw new ReglaDeNegocioVioladaException("Los sentimos el plato no esta disponible" + restauranteId);
         } 
     }
     
-    public static ItemMenu crear(String id, String nombre, String restauranteId, boolean disponible, BigDecimal precio){
-        
+    public static ItemMenu crear(Long id, String nombre, Long restauranteId, boolean disponible, BigDecimal precio, Restaurante restaurante){
+        restaurante.validarRestaurante();
         if(nombre == null || nombre.isBlank()){
             throw new ReglaDeNegocioVioladaException("El plato debe tener un nombre valido");
         } 
@@ -39,14 +39,14 @@ public class ItemMenu{
         return new ItemMenu(id, restauranteId, nombre, precio, disponible);
     }
 
-    public boolean perteneceAlRestaurante(String otrorestauranteId){
+    public boolean perteneceAlRestaurante(Long otrorestauranteId){
         return this.restauranteId.equals(otrorestauranteId);
     }
 
-    public String getId(){
+    public Long getId(){
         return id;
     }
-    public String getRestauranteId(){
+    public Long getRestauranteId(){
         return restauranteId;
     }
 
