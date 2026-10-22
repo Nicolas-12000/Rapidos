@@ -11,7 +11,7 @@ import com.rapidos.despacho.aplicacion.puertos.salida.DespachoRepository;
 import com.rapidos.despacho.dominio.EstadoEntrega;
 
 @Repository
-public class DespachoJdbc implements DespachoRepository {
+class DespachoJdbc implements DespachoRepository {
 
     private final JdbcClient jdbc;
 
