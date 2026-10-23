@@ -4,7 +4,7 @@ import java.util.Optional;
 
 import com.rapidos.ubicacion.dominio.UbicacionActual;
 
-/** Última posición en memoria. El vencimiento lo aplica el adaptador. */
+/** Última posición por repartidor (memoria o Firebase). El vencimiento lo aplica el adaptador. */
 public interface UbicacionStore {
 
     void guardar(UbicacionActual actual);

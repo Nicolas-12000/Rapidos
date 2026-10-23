@@ -1,48 +1,30 @@
 package com.rapidos.ubicacion.infraestructura.config;
 
-import java.time.Clock;
-import java.time.Duration;
-
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import com.rapidos.ubicacion.aplicacion.puertos.entrada.RegistrarMedidaConfirmacionUseCase;
 import com.rapidos.ubicacion.aplicacion.puertos.entrada.ReportarUbicacionUseCase;
 import com.rapidos.ubicacion.aplicacion.puertos.salida.RepartidorDePedido;
+import com.rapidos.ubicacion.aplicacion.puertos.salida.Reloj;
 import com.rapidos.ubicacion.aplicacion.puertos.salida.UbicacionStore;
+import com.rapidos.ubicacion.aplicacion.servicios.DegradacionGpsService;
 import com.rapidos.ubicacion.aplicacion.servicios.UbicacionService;
 import com.rapidos.ubicacion.dominio.ReglaDegradacionGps;
-import com.rapidos.ubicacion.infraestructura.salida.UbicacionEnMemoria;
-import com.rapidos.ubicacion.infraestructura.salida.UbicacionFirebase;
 
 @Configuration
+@EnableConfigurationProperties(UbicacionProperties.class)
 class UbicacionConfig {
 
     @Bean
-    Clock reloj() {
-        return Clock.systemUTC();
+    ReglaDegradacionGps reglaDegradacionGps(UbicacionProperties propiedades) {
+        return new ReglaDegradacionGps(propiedades.getVentanaMedidas(), propiedades.getMinimoMediciones());
     }
 
     @Bean
-    ReglaDegradacionGps reglaDegradacionGps(
-            @Value("${rapidos.ubicacion.ventana-medidas:20}") int tamanoVentana,
-            @Value("${rapidos.ubicacion.minimo-mediciones:5}") int minimoMediciones) {
-        return new ReglaDegradacionGps(tamanoVentana, minimoMediciones);
-    }
-
-    @Bean
-    UbicacionStore ubicacionStore(
-            @Value("${rapidos.ubicacion.store:memoria}") String tipo,
-            @Value("${rapidos.ubicacion.ttl-segundos:30}") long ttlSegundos,
-            @Value("${rapidos.ubicacion.firebase.url:}") String firebaseUrl,
-            @Value("${rapidos.ubicacion.firebase.auth-token:}") String firebaseToken,
-            @Value("${rapidos.ubicacion.firebase.timeout-ms:2000}") long timeoutMs,
-            Clock reloj) {
-        if ("firebase".equalsIgnoreCase(tipo)) {
-            return new UbicacionFirebase(firebaseUrl, firebaseToken, ttlSegundos, reloj,
-                    Duration.ofMillis(timeoutMs));
-        }
-        return new UbicacionEnMemoria(ttlSegundos, reloj);
+    RegistrarMedidaConfirmacionUseCase registrarMedidaConfirmacion(ReglaDegradacionGps regla) {
+        return new DegradacionGpsService(regla);
     }
 
     @Bean
@@ -50,7 +32,7 @@ class UbicacionConfig {
             RepartidorDePedido repartidores,
             ReglaDegradacionGps regla,
             UbicacionStore almacen,
-            Clock reloj) {
+            Reloj reloj) {
         return new UbicacionService(repartidores, regla, almacen, reloj);
     }
 }
