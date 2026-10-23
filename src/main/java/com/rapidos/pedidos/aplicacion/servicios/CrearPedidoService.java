@@ -63,7 +63,7 @@ public class CrearPedidoService implements CrearPedidoUseCase, ConsultarPedidoUs
             var item = menu
                     .obtenerItem(comando.restauranteId(), linea.itemId())
                     .orElseThrow(() -> new IllegalArgumentException("Ítem no válido: " + linea.itemId()));
-            pedidos.insertarLinea(resumen.id(), linea.itemId(), linea.cantidad(), item.precio());
+            pedidos.insertarLinea(resumen.id(), linea.itemId(), linea.cantidad(), item.Precio());
         }
         eventos.publicar(new PedidoConfirmado(resumen.id(), resumen.restauranteId(), resumen.total()));
         long duracionMs = (System.nanoTime() - inicio) / 1_000_000L;
@@ -105,10 +105,10 @@ public class CrearPedidoService implements CrearPedidoUseCase, ConsultarPedidoUs
             var item = menu
                     .obtenerItem(comando.restauranteId(), linea.itemId())
                     .orElseThrow(() -> new IllegalArgumentException("Ítem no válido: " + linea.itemId()));
-            if (!item.disponible()) {
+            if (!item.isDisponible()) {
                 throw new IllegalArgumentException("Ítem no disponible: " + linea.itemId());
             }
-            total = total.add(item.precio().multiply(BigDecimal.valueOf(linea.cantidad())));
+            total = total.add(item.Precio().multiply(BigDecimal.valueOf(linea.cantidad())));
         }
         return total;
     }

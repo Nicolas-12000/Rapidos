@@ -1,7 +1,5 @@
 package com.rapidos.pedidos.dominio.menu;
-
 import java.math.BigDecimal;
-
 
 public class ItemMenu{
 
@@ -12,7 +10,7 @@ public class ItemMenu{
     private boolean disponible;
 
         
-    private ItemMenu(Long id, Long restauranteId, String nombre,  BigDecimal precio, boolean disponible){
+    public ItemMenu(Long id, Long restauranteId, String nombre,  BigDecimal precio, boolean disponible){
         this. id = id;
         this.restauranteId = restauranteId;
         this.nombre = nombre;
@@ -43,14 +41,14 @@ public class ItemMenu{
         return this.restauranteId.equals(otrorestauranteId);
     }
 
-    public Long getId(){
+    public Long Id(){
         return id;
     }
-    public Long getRestauranteId(){
+    public Long RestauranteId(){
         return restauranteId;
     }
 
-    public BigDecimal getPrecio(){
+    public BigDecimal Precio(){
         return precio;
     }
 

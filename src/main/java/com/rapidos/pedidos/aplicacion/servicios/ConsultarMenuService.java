@@ -37,7 +37,7 @@ public class ConsultarMenuService implements ConsultarMenuUseCase {
             return Optional.empty();
         }
         return menu(restauranteId).stream()
-                .filter(item -> item.id().equals(itemId))
+                .filter(item -> item.Id().equals(itemId))
                 .findFirst();
     }
 }
