@@ -1,0 +1,569 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-rapidos-completo-2026",
+    "name": "Rapidos — API completa (hexagonal)",
+    "description": "Colección única para los tres módulos (`pedidos`, `despacho`, `ubicacion`).\n\n**Requisitos:** PostgreSQL (`docker compose up -d`) y app en `{{baseUrl}}` (`./mvnw spring-boot:run`). Datos de ejemplo en `data.sql` (restaurante `{{restauranteId}}`, ítems 1–5).\n\n**Variables:** definidas a nivel de colección (abajo en *Variables*). Puedes importar también `Rapidos-Local.postman_environment.json` si prefieres entorno separado.\n\n**Flujo demo:** carpeta `00 — Demo E2E` en orden. Tras crear pedido se actualizan `pedidoId` y `repartidorId` (asignación demo: `((pedidoId - 1) % 4) + 1`).\n\nMódulo menú: dentro de `pedidos` (`GET /api/restaurantes/{id}/menu`). No existe módulo `catalogo`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "restauranteId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "clienteId",
+      "value": "10",
+      "type": "string"
+    },
+    {
+      "key": "itemId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "cantidad",
+      "value": "2",
+      "type": "string"
+    },
+    {
+      "key": "idempotencyKey",
+      "value": "pedido-postman-001",
+      "type": "string"
+    },
+    {
+      "key": "pedidoId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "repartidorId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "llaveEstado",
+      "value": "est-postman-recogido",
+      "type": "string"
+    },
+    {
+      "key": "llaveEstadoEntregado",
+      "value": "est-postman-entregado",
+      "type": "string"
+    },
+    {
+      "key": "lat",
+      "value": "4.6097",
+      "type": "string"
+    },
+    {
+      "key": "lon",
+      "value": "-74.0817",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "00 — Demo E2E",
+      "description": "Recorre el caso de uso del README (menú → pedido → cola → estado → GPS → mapa). Ejecutar la carpeta con *Run collection* o en orden.",
+      "item": [
+        {
+          "name": "1. GET menú",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Menú 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Hay ítems', () => {",
+                  "    const items = pm.response.json();",
+                  "    pm.expect(items.length).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/restaurantes/{{restauranteId}}/menu"
+          }
+        },
+        {
+          "name": "2. POST crear pedido",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'demo-e2e-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Pedido creado 201', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('pedidoId', String(body.id));",
+                  "    const rep = ((Number(body.id) - 1) % 4) + 1;",
+                  "    pm.collectionVariables.set('repartidorId', String(rep));",
+                  "    pm.test('Total calculado', () => pm.expect(body.total).to.eql(24000));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotencyKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"restauranteId\": {{restauranteId}},\n  \"clienteId\": {{clienteId}},\n  \"items\": [\n    { \"itemId\": {{itemId}}, \"cantidad\": {{cantidad}} }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/api/pedidos"
+          }
+        },
+        {
+          "name": "3. POST mismo pedido (idempotencia)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Misma respuesta 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('Mismo id', () => {",
+                  "    pm.expect(String(body.id)).to.eql(pm.collectionVariables.get('pedidoId'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotencyKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"restauranteId\": {{restauranteId}},\n  \"clienteId\": {{clienteId}},\n  \"items\": [\n    { \"itemId\": {{itemId}}, \"cantidad\": {{cantidad}} }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/api/pedidos"
+          }
+        },
+        {
+          "name": "4. GET cola de eventos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Cola 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Tiene campos de resumen', () => {",
+                  "    const c = pm.response.json();",
+                  "    pm.expect(c).to.have.property('pendientes');",
+                  "    pm.expect(c).to.have.property('publicaciones');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/cola"
+          }
+        },
+        {
+          "name": "5. GET pedido por id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Pedido 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/pedidos/{{pedidoId}}"
+          }
+        },
+        {
+          "name": "6. POST estado RECOGIDO",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Estado 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pedidoId\": {{pedidoId}},\n  \"estado\": \"RECOGIDO\",\n  \"llave\": \"{{llaveEstado}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/repartidores/{{repartidorId}}/estado"
+          }
+        },
+        {
+          "name": "7. PUT ubicación repartidor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Ubicación 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lat\": {{lat}},\n  \"lon\": {{lon}}\n}"
+            },
+            "url": "{{baseUrl}}/api/repartidores/{{repartidorId}}/ubicacion"
+          }
+        },
+        {
+          "name": "8. GET ubicación del pedido (cliente)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Mapa 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Frecuencia GPS', () => {",
+                  "    const u = pm.response.json();",
+                  "    pm.expect(u.frecuenciaSugeridaSegundos).to.be.oneOf([5, 10, 15]);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/pedidos/{{pedidoId}}/ubicacion"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Pedidos",
+      "item": [
+        {
+          "name": "GET menú restaurante",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/restaurantes/{{restauranteId}}/menu",
+            "description": "Menú con caché (módulo `pedidos`). 404 si restaurante inactivo o sin datos."
+          }
+        },
+        {
+          "name": "GET menú restaurante 2 (Pizzería)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/restaurantes/2/menu"
+          }
+        },
+        {
+          "name": "GET menú restaurante 3 (inactivo → 404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/restaurantes/3/menu"
+          }
+        },
+        {
+          "name": "POST crear pedido",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'postman-' + pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('pedidoId', String(body.id));",
+                  "    pm.collectionVariables.set('repartidorId', String(((Number(body.id) - 1) % 4) + 1));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotencyKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"restauranteId\": {{restauranteId}},\n  \"clienteId\": {{clienteId}},\n  \"items\": [\n    { \"itemId\": {{itemId}}, \"cantidad\": {{cantidad}} }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/api/pedidos"
+          }
+        },
+        {
+          "name": "POST crear pedido (sin Idempotency-Key → 400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"restauranteId\": {{restauranteId}},\n  \"clienteId\": {{clienteId}},\n  \"items\": [\n    { \"itemId\": {{itemId}}, \"cantidad\": 1 }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/api/pedidos"
+          }
+        },
+        {
+          "name": "POST crear pedido (misma llave idempotente)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotencyKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"restauranteId\": {{restauranteId}},\n  \"clienteId\": {{clienteId}},\n  \"items\": [\n    { \"itemId\": {{itemId}}, \"cantidad\": {{cantidad}} }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/api/pedidos"
+          }
+        },
+        {
+          "name": "GET pedido por id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/pedidos/{{pedidoId}}"
+          }
+        },
+        {
+          "name": "GET cola (publicaciones pendientes)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/cola",
+            "description": "Alarma operativa: eventos Modulith/JDBC aún no completados."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Despacho",
+      "item": [
+        {
+          "name": "POST estado RECOGIDO",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pedidoId\": {{pedidoId}},\n  \"estado\": \"RECOGIDO\",\n  \"llave\": \"{{llaveEstado}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/repartidores/{{repartidorId}}/estado",
+            "description": "Llave única por transición (ADR-003). Repetir la misma `llave` no cambia el estado."
+          }
+        },
+        {
+          "name": "POST estado ENTREGADO",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pedidoId\": {{pedidoId}},\n  \"estado\": \"ENTREGADO\",\n  \"llave\": \"{{llaveEstadoEntregado}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/repartidores/{{repartidorId}}/estado"
+          }
+        },
+        {
+          "name": "POST estado (llave duplicada — ignorado)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pedidoId\": {{pedidoId}},\n  \"estado\": \"ENTREGADO\",\n  \"llave\": \"{{llaveEstado}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/repartidores/{{repartidorId}}/estado",
+            "description": "Usa la misma llave que RECOGIDO; debe responder 204 sin avanzar estado otra vez."
+          }
+        },
+        {
+          "name": "POST estado (repartidor incorrecto → 422)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pedidoId\": {{pedidoId}},\n  \"estado\": \"RECOGIDO\",\n  \"llave\": \"est-otro-repartidor\"\n}"
+            },
+            "url": "{{baseUrl}}/api/repartidores/99/estado"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Ubicación",
+      "item": [
+        {
+          "name": "PUT reportar ubicación",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lat\": {{lat}},\n  \"lon\": {{lon}}\n}"
+            },
+            "url": "{{baseUrl}}/api/repartidores/{{repartidorId}}/ubicacion",
+            "description": "Solo la última posición por repartidor (TTL en memoria o Firebase según config)."
+          }
+        },
+        {
+          "name": "PUT ubicación inválida (400)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lat\": 999,\n  \"lon\": 0\n}"
+            },
+            "url": "{{baseUrl}}/api/repartidores/{{repartidorId}}/ubicacion"
+          }
+        },
+        {
+          "name": "GET última ubicación del pedido",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/pedidos/{{pedidoId}}/ubicacion",
+            "description": "Incluye `frecuenciaSugeridaSegundos` (5 / 10 / 15) según degradación GPS."
+          }
+        },
+        {
+          "name": "GET ubicación pedido inexistente (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/pedidos/999999/ubicacion"
+          }
+        }
+      ]
+    }
+  ]
+}

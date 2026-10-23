@@ -182,7 +182,7 @@ Cada paso es un commit en tu rama y, cuando el paso cierra algo revisable, un PR
 4. `CrearPedidoService`: valida con `MenuPort`, calcula el total, cobra, aplica la `Idempotency-Key`, guarda y publica `PedidoConfirmado` en la misma transacción. Mide `ConfirmacionMedida` y la publica por el mismo puerto de eventos.
 5. `PedidosController` con `POST /api/pedidos`, `GET /api/pedidos/{id}` y `GET /api/cola`. Deja el método del menú para Esteban, en este mismo controlador. No crees `CatalogoController` ni `ColaController`.
 6. JDBC detrás de `PedidoRepository`. La cola (`spring-modulith-starter-jdbc`) detrás de `PublicadorDeEventos`. El cobro simulado detrás de `Cobro`.
-7. Cuando los demás ya están en `develop-Hexagonal`, `PedidoFlujoIT`: el POST usa `MenuPort`, publica el evento y el listener de despacho avisa. Si el test pide el menú por HTTP para poder crear el pedido, está mal.
+7. Cuando los demás ya están en `develop-Hexagonal`, `PedidoFlujoIT`: `POST /api/pedidos` (MockMvc), publica el evento y el listener de despacho asigna. Perfil `test` + H2 en memoria (`src/test/resources/application-test.yml`); no hace falta Docker para `./mvnw test`. Sigue existiendo `PedidoFlujoTest` sin Spring para el mismo flujo con dobles. Si el test pide el menú por HTTP solo para crear el pedido, está mal.
 
 ### Gio — Dev 5, contigo en `pedidos`, rama `Gio-Hexagonal`
 
@@ -222,11 +222,12 @@ Tu código va en `com.rapidos.pedidos`, paquetes `dominio/menu`, `ConsultarMenu*
 ### Pipe — Dev 4, `ubicacion`, rama `pipe-Hexagonal`
 
 1. Dominio: `UbicacionActual` y `ReglaDegradacionGps` (5 s → 10 s → 15 s, y vuelta a 5 s).
-2. Puerto de entrada `ReportarUbicacionUseCase`. Puertos de salida: almacén en memoria, `Reloj`, y la lectura del repartidor del pedido (puerto hacia `despacho`, no HTTP).
+2. Puerto de entrada `ReportarUbicacionUseCase`. Puertos de salida: `UbicacionStore` (memoria o Firebase), y la lectura del repartidor del pedido (puerto hacia `despacho`, no HTTP).
 3. Servicio: solo la última posición por repartidor, con TTL. Sin tabla de pedidos (ADR-002).
 4. Entrada interna, sin HTTP: listener de `ConfirmacionMedida`, que mueve la frecuencia.
 5. Un controlador con dos métodos: `PUT /api/repartidores/{id}/ubicacion` (lo manda el repartidor) y `GET /api/pedidos/{id}/ubicacion` (lo lee el cliente).
-6. Con la app integrada, `k6 run carga/pedidos.js`: p95 < 2 s, 0 % de rechazos, y la frecuencia sube a 10 s bajo presión. Pásale los números a Nicolás.
+6. **Firebase:** copia `.env.example` a `.env`, pon `RAPIDOS_PERSISTENCIA_UBICACION=firebase`, `FIREBASE_DB_URL` y, si aplica, `FIREBASE_AUTH_TOKEN`. El adaptador se registra en `ubicacion/infraestructura/config` (igual que JDBC en cada módulo con `spring.datasource`). En local sin Firebase: `memoria`.
+7. Con la app integrada (`docker compose up` + `./mvnw spring-boot:run`), `k6 run carga/pedidos.js`: p95 < 2 s y 0 % de rechazos. El script es opcional en CI; valida carga manual. La degradación del GPS se prueba en unitarios (`ReglaDegradacionGpsTest`). Pásale los números a Nicolás.
 
 ---
 

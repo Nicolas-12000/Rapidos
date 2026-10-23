@@ -1,7 +1,7 @@
 -- Datos de ejemplo. Usa INSERT ... ON CONFLICT DO NOTHING para poder re-ejecutar.
 SELECT 1;
 
--- ===== catalogo (Dev 2) =====
+-- ===== menú (dentro de pedidos) =====
 INSERT INTO restaurante (id, nombre, activo) VALUES
     (1, 'Arepas de la 19',     TRUE),
     (2, 'Pizzería La Plaza',   TRUE),

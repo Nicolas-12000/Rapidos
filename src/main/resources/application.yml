@@ -2,12 +2,12 @@ spring:
   application:
     name: rapidos
   datasource:
-    url: jdbc:postgresql://localhost:5432/rapidos
-    username: rapidos
-    password: rapidos   # credencial local de demo
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/rapidos}
+    username: ${SPRING_DATASOURCE_USERNAME:rapidos}
+    password: ${SPRING_DATASOURCE_PASSWORD:rapidos}
   sql:
     init:
-      mode: always
+      mode: ${SPRING_SQL_INIT_MODE:always}
   modulith:
     events:
       jdbc:
@@ -16,17 +16,24 @@ spring:
       republish-outstanding-events-on-restart: true
 
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
 
 rapidos:
+  # Qué adaptador de infraestructura está activo por puerto (el aplicativo no lee esto).
+  # pedidos / despacho / menú → JDBC con spring.datasource (PostgreSQL).
+  persistencia:
+    ubicacion: ${RAPIDOS_PERSISTENCIA_UBICACION:memoria}
+  menu:
+    cache-ttl: ${MENU_CACHE_TTL:5m}
   workers:
-    max-size: 4
-    core-size: 2
-    queue-capacity: 100
+    max-size: ${RAPIDOS_WORKERS_MAX_SIZE:4}
+    core-size: ${RAPIDOS_WORKERS_CORE_SIZE:2}
+    queue-capacity: ${RAPIDOS_WORKERS_QUEUE_CAPACITY:100}
   ubicacion:
-    store: ${UBICACION_STORE:memoria}      # memoria | firebase
-    ttl-segundos: 30
+    ttl-segundos: ${UBICACION_TTL_SEGUNDOS:30}
+    ventana-medidas: ${UBICACION_VENTANA_MEDIDAS:20}
+    minimo-mediciones: ${UBICACION_MINIMO_MEDICIONES:5}
     firebase:
-      url: ${FIREBASE_DB_URL:}             # https://<proyecto>-default-rtdb.firebaseio.com
-      auth-token: ${FIREBASE_AUTH_TOKEN:}  # opcional; no lo subas al repo
-      timeout-ms: 2000
+      url: ${FIREBASE_DB_URL:}
+      auth-token: ${FIREBASE_AUTH_TOKEN:}
+      timeout-ms: ${FIREBASE_TIMEOUT_MS:2000}

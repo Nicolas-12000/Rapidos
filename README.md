@@ -172,20 +172,67 @@ rapidos/
 - Docker y Docker Compose
 - Maven (o el wrapper `./mvnw`)
 
-## 6. Cómo ejecutar
+## 6. Variables de entorno
+
+Toda la configuración sensible o que cambia entre local, Docker y Firebase vive en variables. La plantilla está en **`.env.example`**.
 
 ```bash
-# 1. Levantar PostgreSQL local
+cp .env.example .env
+# Edita .env (no lo subas al repo)
+```
+
+| Variable | Uso | Por defecto |
+|----------|-----|-------------|
+| `SERVER_PORT` | Puerto HTTP de la app | `8080` |
+| `SPRING_DATASOURCE_*` | PostgreSQL (pedidos, despacho, cola Modulith) | `localhost` / `rapidos` |
+| `POSTGRES_*` | Contenedor `postgres` en Docker Compose | `rapidos` |
+| `RAPIDOS_WORKERS_*` | Pool asíncrono de despacho | ver `.env.example` |
+| `MENU_CACHE_TTL` | TTL de la caché del menú | `5m` |
+| `RAPIDOS_PERSISTENCIA_UBICACION` | Adaptador de `UbicacionStore`: `memoria` o `firebase` | `memoria` |
+| `UBICACION_STORE` | Alias antiguo de la fila anterior | — |
+| `FIREBASE_DB_URL` | URL de Realtime Database | vacío |
+| `FIREBASE_AUTH_TOKEN` | Token de la base (si las reglas lo piden) | vacío |
+| `FIREBASE_TIMEOUT_MS` | Timeout HTTP al guardar/leer GPS | `2000` |
+| `UBICACION_TTL_SEGUNDOS` | Cuánto vale la última posición | `30` |
+
+Docker Compose **sustituye** `${VAR}` en `docker-compose.yml` leyendo un archivo `.env` en la raíz del proyecto (no hace falta listar cada variable dos veces). En local, `./mvnw spring-boot:run` también carga `.env` desde la raíz del repo (dependencia `spring-dotenv`); si no existe el archivo, se usan los defaults de `application.yml`.
+
+### Adaptadores de persistencia (toda la app)
+
+El **aplicativo** solo ve puertos (`PedidoRepository`, `UbicacionStore`, …). La tecnología se elige al arrancar:
+
+| Puerto | Adaptador(es) | Cómo se activa |
+|--------|----------------|----------------|
+| Pedidos, despacho, menú (JDBC) | `*Jdbc` + Postgres | `SPRING_DATASOURCE_*` (como cualquier Spring Boot) |
+| Ubicación GPS | `UbicacionEnMemoria` o `UbicacionFirebase` | `RAPIDOS_PERSISTENCIA_UBICACION` → `AdaptadorUbicacionStoreConfig` (módulo ubicación) |
+
+### Ubicación con Firebase (Pipe / Dev 4)
+
+1. Crea un proyecto en [Firebase](https://console.firebase.google.com/) y activa **Realtime Database**.
+2. En `.env` pon `RAPIDOS_PERSISTENCIA_UBICACION=firebase` y `FIREBASE_DB_URL=https://<tu-proyecto>-default-rtdb.firebaseio.com`.
+3. Si las reglas exigen autenticación, copia el secreto de la base en `FIREBASE_AUTH_TOKEN`.
+4. El adaptador guarda en `/ubicaciones/{repartidorId}.json`. Si Firebase falla, la API no tumba el pedido (ADR-002): devuelve vacío al leer.
+
+Para demo local sin Firebase, deja `RAPIDOS_PERSISTENCIA_UBICACION=memoria` (o no definas la variable).
+
+## 7. Cómo ejecutar
+
+```bash
+cp .env.example .env   # primera vez
+
+# 1. Levantar PostgreSQL (y opcionalmente la app)
+docker compose up -d postgres
+# o app + postgres:
 docker compose up -d
 
 # 2. Correr las pruebas (incluye ApplicationModules.verify())
 ./mvnw test
 
-# 3. Arrancar la aplicación
+# 3. Arrancar la aplicación (carga .env automáticamente si existe)
 ./mvnw spring-boot:run
 
-# (opcional) Postman: importar postman/Rapidos-Local.postman_environment.json y las colecciones por módulo
-# (Catálogo, Pedidos, Despacho, Ubicación) o postman/Rapidos-Demo-E2E.postman_collection.json para el flujo completo
+# (opcional) Postman: importar postman/Rapidos-Completo.postman_collection.json (variables incluidas en la colección)
+# o postman/Rapidos-Local.postman_environment.json si prefieres entorno separado
 
 # (opcional) construir la imagen de contenedor
 docker build -t rapidos .
@@ -198,7 +245,7 @@ Los diagramas de módulos se generan en `target/spring-modulith-docs/` al correr
 
 ---
 
-## 7. Caso de uso principal (demo)
+## 8. Caso de uso principal (demo)
 
 **Crear un pedido en el pico → confirmación inmediata → aviso al repartidor → estado → ubicación.**
 
@@ -242,7 +289,7 @@ La respuesta de ubicación incluye `frecuenciaSugeridaSegundos` (5, 10 o 15) y l
 
 ---
 
-## 8. Pruebas
+## 9. Pruebas
 
 - `ModulosTest`: `verify()` de Modulith + generación de documentación (`Documenter`).
 - `PedidoFlujoIT`: crea un pedido, verifica idempotencia, verifica el evento y el aviso en consola.
@@ -258,7 +305,7 @@ La respuesta de ubicación incluye `frecuenciaSugeridaSegundos` (5, 10 o 15) y l
 
 ---
 
-## 9. Fuera de alcance
+## 10. Fuera de alcance
 
 - Microservicios, gRPC o mensajería pesada (Kafka, RabbitMQ).
 - Autoescalado real, AWS Lambda, SQS y caché gestionada (ver *Ruta a producción* en la sección 3).
@@ -267,7 +314,7 @@ La respuesta de ubicación incluye `frecuenciaSugeridaSegundos` (5, 10 o 15) y l
 
 ---
 
-## 10. Equipo y ramas
+## 11. Equipo y ramas
 
 La línea hexagonal no usa `develop` ni `Nicolas`. Esas dos ramas son Modulith.
 
