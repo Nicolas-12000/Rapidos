@@ -8,9 +8,7 @@ import com.rapidos.pedidos.PedidoConfirmado;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
-import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -96,8 +94,8 @@ class DespachoServiceTest {
     // ------------------------------------------------------------------ campos
     final RepositorioFalso repositorio = new RepositorioFalso();
     final AvisadorFalso avisador = new AvisadorFalso();
-    final Clock relojFijo = Clock.fixed(Instant.parse("2027-01-01T10:00:00Z"), ZoneOffset.UTC);
-    final DespachoService servicio = new DespachoService(repositorio, avisador, relojFijo);
+    final DespachoService servicio = new DespachoService(
+            repositorio, avisador, () -> Instant.parse("2027-01-01T10:00:00Z"));
 
     final PedidoConfirmado pedido = new PedidoConfirmado(42L, 1L, new BigDecimal("15000.00"));
 

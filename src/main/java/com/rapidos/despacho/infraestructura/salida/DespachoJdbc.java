@@ -4,6 +4,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Optional;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -21,19 +22,22 @@ class DespachoJdbc implements DespachoRepository {
 
     @Override
     public boolean crearAsignacion(Long pedidoId, Long repartidorId, Instant asignadoEn) {
-        int filas = jdbc.sql("""
-                        INSERT INTO despacho_pedido
-                            (pedido_id, repartidor_id, estado, asignado_en, actualizado_en)
-                        VALUES
-                            (:pedidoId, :repartidorId, :estado, :asignadoEn, :asignadoEn)
-                        ON CONFLICT (pedido_id) DO NOTHING
-                        """)
-                .param("pedidoId", pedidoId)
-                .param("repartidorId", repartidorId)
-                .param("estado", EstadoEntrega.ASIGNADO.name())
-                .param("asignadoEn", Timestamp.from(asignadoEn))
-                .update();
-        return filas == 1;
+        try {
+            int filas = jdbc.sql("""
+                            INSERT INTO despacho_pedido
+                                (pedido_id, repartidor_id, estado, asignado_en, actualizado_en)
+                            VALUES
+                                (:pedidoId, :repartidorId, :estado, :asignadoEn, :asignadoEn)
+                            """)
+                    .param("pedidoId", pedidoId)
+                    .param("repartidorId", repartidorId)
+                    .param("estado", EstadoEntrega.ASIGNADO.name())
+                    .param("asignadoEn", Timestamp.from(asignadoEn))
+                    .update();
+            return filas == 1;
+        } catch (DataIntegrityViolationException duplicado) {
+            return false;
+        }
     }
 
     @Override
@@ -43,20 +47,23 @@ class DespachoJdbc implements DespachoRepository {
             EstadoEntrega estado,
             String llave,
             Instant registradoEn) {
-        int filas = jdbc.sql("""
-                        INSERT INTO despacho_estado
-                            (pedido_id, repartidor_id, estado, llave_estado, registrado_en)
-                        VALUES
-                            (:pedidoId, :repartidorId, :estado, :llave, :registradoEn)
-                        ON CONFLICT (llave_estado) DO NOTHING
-                        """)
-                .param("pedidoId", pedidoId)
-                .param("repartidorId", repartidorId)
-                .param("estado", estado.name())
-                .param("llave", llave)
-                .param("registradoEn", Timestamp.from(registradoEn))
-                .update();
-        return filas == 1;
+        try {
+            int filas = jdbc.sql("""
+                            INSERT INTO despacho_estado
+                                (pedido_id, repartidor_id, estado, llave_estado, registrado_en)
+                            VALUES
+                                (:pedidoId, :repartidorId, :estado, :llave, :registradoEn)
+                            """)
+                    .param("pedidoId", pedidoId)
+                    .param("repartidorId", repartidorId)
+                    .param("estado", estado.name())
+                    .param("llave", llave)
+                    .param("registradoEn", Timestamp.from(registradoEn))
+                    .update();
+            return filas == 1;
+        } catch (DataIntegrityViolationException llaveDuplicada) {
+            return false;
+        }
     }
 
     @Override

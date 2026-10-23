@@ -1,27 +1,27 @@
 package com.rapidos.despacho.aplicacion.servicios;
 
-import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
 
-import com.rapidos.despacho.ConsultaRepartidor;
+import com.rapidos.despacho.aplicacion.puertos.entrada.ConsultarRepartidorUseCase;
 import com.rapidos.despacho.aplicacion.puertos.entrada.ProcesarPedidoConfirmado;
 import com.rapidos.despacho.aplicacion.puertos.entrada.RegistrarEstadoUseCase;
 import com.rapidos.despacho.aplicacion.puertos.salida.Avisador;
 import com.rapidos.despacho.aplicacion.puertos.salida.DespachoRepository;
+import com.rapidos.despacho.aplicacion.puertos.salida.Reloj;
 import com.rapidos.despacho.dominio.EstadoEntrega;
 import com.rapidos.despacho.dominio.LlaveEstado;
 import com.rapidos.pedidos.PedidoConfirmado;
 
-public class DespachoService implements ProcesarPedidoConfirmado, RegistrarEstadoUseCase, ConsultaRepartidor {
+public class DespachoService implements ProcesarPedidoConfirmado, RegistrarEstadoUseCase, ConsultarRepartidorUseCase {
 
     private static final long REPARTIDORES_DEMO = 4;
 
     private final DespachoRepository repositorio;
     private final Avisador avisador;
-    private final Clock reloj;
+    private final Reloj reloj;
 
-    public DespachoService(DespachoRepository repositorio, Avisador avisador, Clock reloj) {
+    public DespachoService(DespachoRepository repositorio, Avisador avisador, Reloj reloj) {
         this.repositorio = repositorio;
         this.avisador = avisador;
         this.reloj = reloj;
@@ -32,7 +32,7 @@ public class DespachoService implements ProcesarPedidoConfirmado, RegistrarEstad
         validarPedidoConfirmado(pedido);
         Long repartidorId = asignarRepartidor(pedido.pedidoId());
 
-        if (!repositorio.crearAsignacion(pedido.pedidoId(), repartidorId, reloj.instant())) {
+        if (!repositorio.crearAsignacion(pedido.pedidoId(), repartidorId, reloj.ahora())) {
             return;
         }
 
@@ -54,7 +54,7 @@ public class DespachoService implements ProcesarPedidoConfirmado, RegistrarEstad
             throw new IllegalStateException("El pedido pertenece a otro repartidor");
         }
 
-        Instant ahora = reloj.instant();
+        Instant ahora = reloj.ahora();
         if (repositorio.guardarEstado(pedidoId, repartidorId, estado, llaveValida.valor(), ahora)) {
             repositorio.actualizarEstado(pedidoId, estado, ahora);
         }
