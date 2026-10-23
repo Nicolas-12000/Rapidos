@@ -7,7 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 @Component
-public class AvisadorDespacho implements Avisador {
+class AvisadorDespacho implements Avisador {
 
     private static final Logger log = LoggerFactory.getLogger(AvisadorDespacho.class);
 

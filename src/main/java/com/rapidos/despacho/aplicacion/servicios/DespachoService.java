@@ -10,6 +10,7 @@ import com.rapidos.despacho.aplicacion.puertos.entrada.RegistrarEstadoUseCase;
 import com.rapidos.despacho.aplicacion.puertos.salida.Avisador;
 import com.rapidos.despacho.aplicacion.puertos.salida.DespachoRepository;
 import com.rapidos.despacho.dominio.EstadoEntrega;
+import com.rapidos.despacho.dominio.LlaveEstado;
 import com.rapidos.pedidos.PedidoConfirmado;
 
 public class DespachoService implements ProcesarPedidoConfirmado, RegistrarEstadoUseCase, ConsultaRepartidor {
@@ -41,7 +42,11 @@ public class DespachoService implements ProcesarPedidoConfirmado, RegistrarEstad
 
     @Override
     public void registrarEstado(Long repartidorId, Long pedidoId, EstadoEntrega estado, String llave) {
-        validarEstado(repartidorId, pedidoId, estado, llave);
+        if (repartidorId == null || pedidoId == null || estado == null) {
+            throw new IllegalArgumentException("repartidorId, pedidoId y estado son obligatorios");
+        }
+        // LlaveEstado encapsula la regla de dominio: nula o vacía nunca es válida (ADR-003)
+        LlaveEstado llaveValida = LlaveEstado.de(llave);
 
         Long asignado = repositorio.repartidorDe(pedidoId)
                 .orElseThrow(() -> new IllegalStateException("El pedido no tiene un despacho asignado"));
@@ -50,7 +55,7 @@ public class DespachoService implements ProcesarPedidoConfirmado, RegistrarEstad
         }
 
         Instant ahora = reloj.instant();
-        if (repositorio.guardarEstado(pedidoId, repartidorId, estado, llave.trim(), ahora)) {
+        if (repositorio.guardarEstado(pedidoId, repartidorId, estado, llaveValida.valor(), ahora)) {
             repositorio.actualizarEstado(pedidoId, estado, ahora);
         }
     }
@@ -78,16 +83,6 @@ public class DespachoService implements ProcesarPedidoConfirmado, RegistrarEstad
     private static void validarPedidoConfirmado(PedidoConfirmado pedido) {
         if (pedido == null || pedido.pedidoId() == null || pedido.restauranteId() == null) {
             throw new IllegalArgumentException("El pedido confirmado está incompleto");
-        }
-    }
-
-    private static void validarEstado(
-            Long repartidorId,
-            Long pedidoId,
-            EstadoEntrega estado,
-            String llave) {
-        if (repartidorId == null || pedidoId == null || estado == null || llave == null || llave.isBlank()) {
-            throw new IllegalArgumentException("repartidorId, pedidoId, estado y llave son obligatorios");
         }
     }
 }
