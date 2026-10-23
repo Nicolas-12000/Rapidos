@@ -1,7 +1,6 @@
 package com.rapidos.pedidos.aplicacion.servicios;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Optional;
 
@@ -14,6 +13,7 @@ import com.rapidos.pedidos.aplicacion.puertos.salida.Cobro;
 import com.rapidos.pedidos.aplicacion.puertos.salida.MenuPort;
 import com.rapidos.pedidos.aplicacion.puertos.salida.PedidoRepository;
 import com.rapidos.pedidos.aplicacion.puertos.salida.PublicadorDeEventos;
+import com.rapidos.pedidos.aplicacion.puertos.salida.Reloj;
 import com.rapidos.pedidos.dominio.pedido.Pedido;
 import com.rapidos.pedidos.dominio.pedido.PedidoResumen;
 
@@ -23,21 +23,24 @@ public class CrearPedidoService implements CrearPedidoUseCase, ConsultarPedidoUs
     private final PedidoRepository pedidos;
     private final Cobro cobro;
     private final PublicadorDeEventos eventos;
+    private final Reloj reloj;
 
     public CrearPedidoService(
             MenuPort menu,
             PedidoRepository pedidos,
             Cobro cobro,
-            PublicadorDeEventos eventos) {
+            PublicadorDeEventos eventos,
+            Reloj reloj) {
         this.menu = menu;
         this.pedidos = pedidos;
         this.cobro = cobro;
         this.eventos = eventos;
+        this.reloj = reloj;
     }
 
     @Override
     public PedidoResumen crear(CrearPedidoComando comando, String llavePedido) {
-        long inicio = System.nanoTime();
+        long inicio = reloj.nanos();
         if (llavePedido == null || llavePedido.isBlank()) {
             throw new IllegalArgumentException("Falta la cabecera Idempotency-Key");
         }
@@ -58,7 +61,7 @@ public class CrearPedidoService implements CrearPedidoUseCase, ConsultarPedidoUs
         if (!cobro.cobrar(pedido.clienteId(), pedido.total())) {
             throw new IllegalStateException("Cobro rechazado");
         }
-        var creadoEn = Instant.now();
+        var creadoEn = reloj.ahora();
         var resumen = pedidos.insertar(
                 pedido.restauranteId(),
                 pedido.clienteId(),
@@ -73,7 +76,7 @@ public class CrearPedidoService implements CrearPedidoUseCase, ConsultarPedidoUs
             pedidos.insertarLinea(resumen.id(), linea.itemId(), linea.cantidad(), precios.get(i));
         }
         eventos.publicar(new PedidoConfirmado(resumen.id(), resumen.restauranteId(), resumen.total()));
-        long duracionMs = (System.nanoTime() - inicio) / 1_000_000L;
+        long duracionMs = (reloj.nanos() - inicio) / 1_000_000L;
         eventos.publicar(new ConfirmacionMedida(duracionMs));
         return resumen;
     }

@@ -6,7 +6,7 @@ import org.springframework.stereotype.Component;
 import com.rapidos.pedidos.aplicacion.puertos.salida.PublicadorDeEventos;
 
 @Component
-public class PublicadorSpring implements PublicadorDeEventos {
+class PublicadorSpring implements PublicadorDeEventos {
 
     private final ApplicationEventPublisher eventos;
 

@@ -32,6 +32,14 @@ public class ConsultarMenuService implements ConsultarMenuUseCase {
     }
 
     @Override
+    public Optional<List<ItemMenu>> menuSiActivo(Long restauranteId) {
+        if (!restauranteActivo(restauranteId)) {
+            return Optional.empty();
+        }
+        return Optional.of(menu(restauranteId));
+    }
+
+    @Override
     public Optional<ItemMenu> obtenerItem(Long restauranteId, Long itemId) {
         if (restauranteId == null || itemId == null) {
             return Optional.empty();

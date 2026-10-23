@@ -20,6 +20,7 @@ import com.rapidos.pedidos.aplicacion.puertos.salida.Cobro;
 import com.rapidos.pedidos.aplicacion.puertos.salida.MenuPort;
 import com.rapidos.pedidos.aplicacion.puertos.salida.PedidoRepository;
 import com.rapidos.pedidos.aplicacion.puertos.salida.PublicadorDeEventos;
+import com.rapidos.pedidos.testsupport.RelojDePrueba;
 import com.rapidos.pedidos.dominio.menu.ItemMenu;
 import com.rapidos.pedidos.dominio.pedido.LineaPedido;
 import com.rapidos.pedidos.dominio.pedido.PedidoResumen;
@@ -30,7 +31,8 @@ class PedidosServiceTest {
     private final PedidosEnMemoria repositorio = new PedidosEnMemoria();
     private final CobroFalso cobro = new CobroFalso();
     private final EventosEnMemoria eventos = new EventosEnMemoria();
-    private final CrearPedidoService servicio = new CrearPedidoService(menu, repositorio, cobro, eventos);
+    private final CrearPedidoService servicio =
+            new CrearPedidoService(menu, repositorio, cobro, eventos, new RelojDePrueba());
 
     @Test
     void confirmaCobraGuardaYPublica() {
