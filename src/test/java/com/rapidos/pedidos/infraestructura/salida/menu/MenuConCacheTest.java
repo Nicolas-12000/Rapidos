@@ -15,13 +15,14 @@ import static org.mockito.Mockito.when;
 import com.rapidos.pedidos.aplicacion.puertos.salida.MenuRepository;
 import com.rapidos.pedidos.aplicacion.servicios.ConsultarMenuService;
 import com.rapidos.pedidos.dominio.menu.ItemMenu;
+import com.rapidos.support.ClockAvanzable;
 
 class MenuConCacheTest {
 
     private final MenuRepository repositorio = mock(MenuRepository.class);
-    private final RelojFalso reloj = new RelojFalso();
+    private final ClockAvanzable reloj = new ClockAvanzable();
     private final ConsultarMenuService servicio = new ConsultarMenuService(
-            new MenuConCache(repositorio, Duration.ofMinutes(5), reloj));
+            MenuConCache.paraPruebas(repositorio, Duration.ofMinutes(5), reloj));
 
     @BeforeEach
     void datos() {

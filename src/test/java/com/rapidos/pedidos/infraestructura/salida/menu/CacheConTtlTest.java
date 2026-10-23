@@ -2,6 +2,8 @@ package com.rapidos.pedidos.infraestructura.salida.menu;
 
 import java.time.Clock;
 import java.time.Duration;
+
+import com.rapidos.support.ClockAvanzable;
 import java.util.ArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -13,7 +15,7 @@ import org.junit.jupiter.api.Test;
 
 class CacheConTtlTest {
 
-    private final RelojFalso reloj = new RelojFalso();
+    private final ClockAvanzable reloj = new ClockAvanzable();
     private final CacheConTtl<Long, String> cache = new CacheConTtl<>(Duration.ofMinutes(5), reloj);
     private final AtomicInteger cargas = new AtomicInteger();
 

@@ -1,0 +1,642 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-rapidos-completo-2026",
+    "name": "Rapidos — API completa (hexagonal)",
+    "description": "Colección única para `pedidos`, `despacho` y `ubicacion`. Todas las variables están en la pestaña **Variables** de la colección (no hace falta archivo de entorno aparte).\n\n**Requisitos:** `docker compose up -d` (base de datos) y `./mvnw spring-boot:run` en `{{baseUrl}}`. Datos demo en `data.sql`: restaurante 1 (ítems 1–3), restaurante 2 (ítems 4–5), restaurante 3 inactivo.\n\n**Variables clave:**\n| Variable | Valor demo | Uso |\n|----------|------------|-----|\n| baseUrl | http://localhost:8080 | Raíz API |\n| restauranteId | 1 | Arepas de la 19 |\n| clienteId | 10 | Cliente de prueba |\n| itemId / cantidad | 1 / 2 | Arepa ×2 → total 24000 |\n| itemId2 / cantidadItem2 | 2 / 1 | Segunda línea (jugo) |\n| itemIdNoDisponible | 3 | Ítem no disponible → error |\n| idempotencyKey | (se regenera) | Cabecera Idempotency-Key |\n| pedidoId / repartidorId | (auto tras POST) | repartidor = ((pedidoId-1)%4)+1 |\n| esperaDespachoMs | 3000 | Pausa antes de estado (worker async) |\n| llaveEstado / llaveEstadoEntregado | únicas por transición | ADR-003 |\n| lat / lon | Bogotá demo | GPS repartidor |\n\n**Demo E2E:** ejecutar carpeta `00 — Demo E2E` en orden (Collection Runner). El paso 5b espera al listener de despacho.\n\nMenú = módulo `pedidos` (`GET /api/restaurantes/{id}/menu`). No existe módulo `catalogo`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080", "type": "string" },
+    { "key": "restauranteId", "value": "1", "type": "string" },
+    { "key": "restauranteId2", "value": "2", "type": "string" },
+    { "key": "restauranteIdInactivo", "value": "3", "type": "string" },
+    { "key": "clienteId", "value": "10", "type": "string" },
+    { "key": "itemId", "value": "1", "type": "string" },
+    { "key": "itemId2", "value": "2", "type": "string" },
+    { "key": "itemIdNoDisponible", "value": "3", "type": "string" },
+    { "key": "cantidad", "value": "2", "type": "string" },
+    { "key": "cantidadItem2", "value": "1", "type": "string" },
+    { "key": "totalEsperadoUnItem", "value": "24000", "type": "string" },
+    { "key": "totalEsperadoMultiItem", "value": "29000", "type": "string" },
+    { "key": "idempotencyKey", "value": "pedido-postman-001", "type": "string" },
+    { "key": "pedidoId", "value": "1", "type": "string" },
+    { "key": "pedidoIdInexistente", "value": "999999", "type": "string" },
+    { "key": "repartidorId", "value": "1", "type": "string" },
+    { "key": "repartidorIdIncorrecto", "value": "99", "type": "string" },
+    { "key": "esperaDespachoMs", "value": "3000", "type": "string" },
+    { "key": "llaveEstado", "value": "est-postman-recogido", "type": "string" },
+    { "key": "llaveEstadoEntregado", "value": "est-postman-entregado", "type": "string" },
+    { "key": "llaveEstadoOtro", "value": "est-otro-repartidor", "type": "string" },
+    { "key": "lat", "value": "4.6097", "type": "string" },
+    { "key": "lon", "value": "-74.0817", "type": "string" },
+    { "key": "latInvalida", "value": "999", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "00 — Demo E2E",
+      "description": "Flujo README: menú → pedido → idempotencia → cola → pedido → espera worker → RECOGIDO → ENTREGADO → GPS → mapa.",
+      "item": [
+        {
+          "name": "1. GET menú",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Menú 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Hay ítems', () => {",
+                  "    const items = pm.response.json();",
+                  "    pm.expect(items.length).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/restaurantes/{{restauranteId}}/menu"
+          }
+        },
+        {
+          "name": "2. POST crear pedido",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'demo-e2e-' + Date.now());",
+                  "pm.collectionVariables.set('llaveEstado', 'est-e2e-recogido-' + Date.now());",
+                  "pm.collectionVariables.set('llaveEstadoEntregado', 'est-e2e-entregado-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Pedido creado 201', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('pedidoId', String(body.id));",
+                  "    const rep = ((Number(body.id) - 1) % 4) + 1;",
+                  "    pm.collectionVariables.set('repartidorId', String(rep));",
+                  "    const esperado = Number(pm.collectionVariables.get('totalEsperadoUnItem'));",
+                  "    pm.test('Total calculado', () => pm.expect(Number(body.total)).to.eql(esperado));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{idempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"restauranteId\": {{restauranteId}},\n  \"clienteId\": {{clienteId}},\n  \"items\": [\n    { \"itemId\": {{itemId}}, \"cantidad\": {{cantidad}} }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/api/pedidos"
+          }
+        },
+        {
+          "name": "3. POST mismo pedido (idempotencia)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Misma respuesta 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('Mismo id', () => {",
+                  "    pm.expect(String(body.id)).to.eql(pm.collectionVariables.get('pedidoId'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{idempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"restauranteId\": {{restauranteId}},\n  \"clienteId\": {{clienteId}},\n  \"items\": [\n    { \"itemId\": {{itemId}}, \"cantidad\": {{cantidad}} }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/api/pedidos"
+          }
+        },
+        {
+          "name": "4. GET cola de eventos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Cola 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Resumen cola', () => {",
+                  "    const c = pm.response.json();",
+                  "    pm.expect(c).to.have.property('pendientes');",
+                  "    pm.expect(c).to.have.property('publicaciones');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/cola"
+          }
+        },
+        {
+          "name": "5. GET pedido por id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Pedido 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Id coincide', () => {",
+                  "    pm.expect(String(pm.response.json().id)).to.eql(pm.collectionVariables.get('pedidoId'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/pedidos/{{pedidoId}}"
+          }
+        },
+        {
+          "name": "5b. Esperar despacho (worker async)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ms = Number(pm.collectionVariables.get('esperaDespachoMs') || 3000);",
+                  "const sleep = (t) => new Promise((resolve) => setTimeout(resolve, t));",
+                  "await sleep(ms);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Cola consultada tras espera', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/cola",
+            "description": "Pausa `esperaDespachoMs` ms para que el listener asigne repartidor antes del estado."
+          }
+        },
+        {
+          "name": "6. POST estado RECOGIDO",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Estado RECOGIDO 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pedidoId\": {{pedidoId}},\n  \"estado\": \"RECOGIDO\",\n  \"llave\": \"{{llaveEstado}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/repartidores/{{repartidorId}}/estado"
+          }
+        },
+        {
+          "name": "7. POST estado ENTREGADO",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Estado ENTREGADO 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pedidoId\": {{pedidoId}},\n  \"estado\": \"ENTREGADO\",\n  \"llave\": \"{{llaveEstadoEntregado}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/repartidores/{{repartidorId}}/estado"
+          }
+        },
+        {
+          "name": "8. PUT ubicación repartidor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Ubicación 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lat\": {{lat}},\n  \"lon\": {{lon}}\n}"
+            },
+            "url": "{{baseUrl}}/api/repartidores/{{repartidorId}}/ubicacion"
+          }
+        },
+        {
+          "name": "9. GET ubicación del pedido (cliente)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Mapa 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Frecuencia GPS', () => {",
+                  "    const u = pm.response.json();",
+                  "    pm.expect(u.frecuenciaSugeridaSegundos).to.be.oneOf([5, 10, 15]);",
+                  "    pm.expect(u.lat).to.eql(Number(pm.collectionVariables.get('lat')));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/pedidos/{{pedidoId}}/ubicacion"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Pedidos",
+      "item": [
+        {
+          "name": "GET menú restaurante {{restauranteId}}",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/restaurantes/{{restauranteId}}/menu",
+            "description": "Menú con caché. Ítems 1–3 (ítem 3 no disponible en pedido)."
+          }
+        },
+        {
+          "name": "GET menú restaurante {{restauranteId2}} (Pizzería)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/restaurantes/{{restauranteId2}}/menu"
+          }
+        },
+        {
+          "name": "GET menú restaurante {{restauranteIdInactivo}} (inactivo → 404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/restaurantes/{{restauranteIdInactivo}}/menu"
+          }
+        },
+        {
+          "name": "POST crear pedido (un ítem)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'postman-' + pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('pedidoId', String(body.id));",
+                  "    pm.collectionVariables.set('repartidorId', String(((Number(body.id) - 1) % 4) + 1));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{idempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"restauranteId\": {{restauranteId}},\n  \"clienteId\": {{clienteId}},\n  \"items\": [\n    { \"itemId\": {{itemId}}, \"cantidad\": {{cantidad}} }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/api/pedidos"
+          }
+        },
+        {
+          "name": "POST crear pedido (varias líneas)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'postman-multi-' + pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('pedidoId', String(body.id));",
+                  "    pm.collectionVariables.set('repartidorId', String(((Number(body.id) - 1) % 4) + 1));",
+                  "    const esperado = Number(pm.collectionVariables.get('totalEsperadoMultiItem'));",
+                  "    pm.test('Total multi-ítem', () => pm.expect(Number(body.total)).to.eql(esperado));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{idempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"restauranteId\": {{restauranteId}},\n  \"clienteId\": {{clienteId}},\n  \"items\": [\n    { \"itemId\": {{itemId}}, \"cantidad\": {{cantidad}} },\n    { \"itemId\": {{itemId2}}, \"cantidad\": {{cantidadItem2}} }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/api/pedidos",
+            "description": "Arepa×2 + jugo×1 = 29000 según data.sql."
+          }
+        },
+        {
+          "name": "POST crear pedido (ítem no disponible → 400)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idempotencyKey', 'postman-bad-item-' + Date.now());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{idempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"restauranteId\": {{restauranteId}},\n  \"clienteId\": {{clienteId}},\n  \"items\": [\n    { \"itemId\": {{itemIdNoDisponible}}, \"cantidad\": 1 }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/api/pedidos"
+          }
+        },
+        {
+          "name": "POST crear pedido (sin Idempotency-Key → 400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"restauranteId\": {{restauranteId}},\n  \"clienteId\": {{clienteId}},\n  \"items\": [\n    { \"itemId\": {{itemId}}, \"cantidad\": 1 }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/api/pedidos"
+          }
+        },
+        {
+          "name": "POST crear pedido (items vacíos → 400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{idempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"restauranteId\": {{restauranteId}},\n  \"clienteId\": {{clienteId}},\n  \"items\": []\n}"
+            },
+            "url": "{{baseUrl}}/api/pedidos"
+          }
+        },
+        {
+          "name": "POST crear pedido (misma llave idempotente)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{idempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"restauranteId\": {{restauranteId}},\n  \"clienteId\": {{clienteId}},\n  \"items\": [\n    { \"itemId\": {{itemId}}, \"cantidad\": {{cantidad}} }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/api/pedidos"
+          }
+        },
+        {
+          "name": "GET pedido por id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/pedidos/{{pedidoId}}"
+          }
+        },
+        {
+          "name": "GET pedido inexistente (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/pedidos/{{pedidoIdInexistente}}"
+          }
+        },
+        {
+          "name": "GET cola (publicaciones pendientes)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/cola",
+            "description": "Eventos Modulith/JDBC aún no completados."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Despacho",
+      "item": [
+        {
+          "name": "POST estado RECOGIDO",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ms = Number(pm.collectionVariables.get('esperaDespachoMs') || 3000);",
+                  "const sleep = (t) => new Promise((r) => setTimeout(r, t));",
+                  "await sleep(ms);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pedidoId\": {{pedidoId}},\n  \"estado\": \"RECOGIDO\",\n  \"llave\": \"{{llaveEstado}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/repartidores/{{repartidorId}}/estado",
+            "description": "Ejecutar tras crear pedido. Llave única (ADR-003)."
+          }
+        },
+        {
+          "name": "POST estado ENTREGADO",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pedidoId\": {{pedidoId}},\n  \"estado\": \"ENTREGADO\",\n  \"llave\": \"{{llaveEstadoEntregado}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/repartidores/{{repartidorId}}/estado"
+          }
+        },
+        {
+          "name": "POST estado (llave duplicada — ignorado)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pedidoId\": {{pedidoId}},\n  \"estado\": \"ENTREGADO\",\n  \"llave\": \"{{llaveEstado}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/repartidores/{{repartidorId}}/estado",
+            "description": "Reutiliza llave de RECOGIDO; 204 sin cambiar estado a ENTREGADO."
+          }
+        },
+        {
+          "name": "POST estado (llave vacía → 400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pedidoId\": {{pedidoId}},\n  \"estado\": \"RECOGIDO\",\n  \"llave\": \"   \"\n}"
+            },
+            "url": "{{baseUrl}}/api/repartidores/{{repartidorId}}/estado"
+          }
+        },
+        {
+          "name": "POST estado (repartidor incorrecto → 422)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pedidoId\": {{pedidoId}},\n  \"estado\": \"RECOGIDO\",\n  \"llave\": \"{{llaveEstadoOtro}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/repartidores/{{repartidorIdIncorrecto}}/estado"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Ubicación",
+      "item": [
+        {
+          "name": "PUT reportar ubicación",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lat\": {{lat}},\n  \"lon\": {{lon}}\n}"
+            },
+            "url": "{{baseUrl}}/api/repartidores/{{repartidorId}}/ubicacion",
+            "description": "Memoria (default) o Firebase según RAPIDOS_PERSISTENCIA_UBICACION."
+          }
+        },
+        {
+          "name": "PUT ubicación inválida (400)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lat\": {{latInvalida}},\n  \"lon\": 0\n}"
+            },
+            "url": "{{baseUrl}}/api/repartidores/{{repartidorId}}/ubicacion"
+          }
+        },
+        {
+          "name": "GET última ubicación del pedido",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/pedidos/{{pedidoId}}/ubicacion",
+            "description": "Campo frecuenciaSugeridaSegundos: 5, 10 o 15."
+          }
+        },
+        {
+          "name": "GET ubicación pedido inexistente (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/pedidos/{{pedidoIdInexistente}}/ubicacion"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,6 +1,5 @@
 package com.rapidos.despacho.infraestructura.config;
 
-import java.time.Clock;
 import java.util.Optional;
 
 import org.springframework.context.annotation.Bean;
@@ -13,6 +12,7 @@ import com.rapidos.despacho.aplicacion.puertos.entrada.ProcesarPedidoConfirmado;
 import com.rapidos.despacho.aplicacion.puertos.entrada.RegistrarEstadoUseCase;
 import com.rapidos.despacho.aplicacion.puertos.salida.Avisador;
 import com.rapidos.despacho.aplicacion.puertos.salida.DespachoRepository;
+import com.rapidos.despacho.aplicacion.puertos.salida.Reloj;
 import com.rapidos.despacho.aplicacion.servicios.DespachoService;
 import com.rapidos.despacho.dominio.EstadoEntrega;
 
@@ -20,8 +20,8 @@ import com.rapidos.despacho.dominio.EstadoEntrega;
 class DespachoConfig {
 
     @Bean
-    DespachoService despachoService(DespachoRepository repositorio, Avisador avisador) {
-        return new DespachoService(repositorio, avisador, Clock.systemUTC());
+    DespachoService despachoService(DespachoRepository repositorio, Avisador avisador, Reloj reloj) {
+        return new DespachoService(repositorio, avisador, reloj);
     }
 
     @Bean

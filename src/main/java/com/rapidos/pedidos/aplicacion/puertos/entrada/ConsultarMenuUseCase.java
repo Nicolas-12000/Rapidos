@@ -12,5 +12,8 @@ public interface ConsultarMenuUseCase {
 
     List<ItemMenu> menu(Long restauranteId);
 
+    /** Vacío si el restaurante no existe o está inactivo. El controlador solo traduce HTTP. */
+    Optional<List<ItemMenu>> menuSiActivo(Long restauranteId);
+
     Optional<ItemMenu> obtenerItem(Long restauranteId, Long itemId);
 }

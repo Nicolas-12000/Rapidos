@@ -13,7 +13,7 @@ import com.rapidos.pedidos.aplicacion.puertos.entrada.CrearPedidoComando;
 import com.rapidos.pedidos.aplicacion.puertos.salida.Cobro;
 import com.rapidos.pedidos.aplicacion.puertos.salida.MenuPort;
 import com.rapidos.pedidos.aplicacion.puertos.salida.PedidoRepository;
-import com.rapidos.pedidos.aplicacion.puertos.salida.PublicadorDeEventos;
+import com.rapidos.pedidos.testsupport.RelojDePrueba;
 import com.rapidos.pedidos.dominio.menu.ItemMenu;
 import com.rapidos.pedidos.dominio.pedido.LineaPedido;
 import com.rapidos.pedidos.dominio.pedido.PedidoResumen;
@@ -21,8 +21,8 @@ import com.rapidos.pedidos.dominio.pedido.PedidoResumen;
 class PedidosServiceValidacionTest {
 
     private final MenuFijo menu = new MenuFijo();
-    private final CrearPedidoService servicio = new CrearPedidoService(menu, new PedidosVacios(), new CobroFijo(), evento -> {
-    });
+    private final CrearPedidoService servicio = new CrearPedidoService(
+            menu, new PedidosVacios(), new CobroFijo(), evento -> {}, new RelojDePrueba());
 
     @Test
     void rechazaListaDeItemsVacia() {

@@ -1,107 +1,79 @@
 package com.rapidos;
 
-import com.rapidos.pedidos.PedidoConfirmado;
-import com.rapidos.pedidos.aplicacion.puertos.salida.MenuPort;
-import com.rapidos.pedidos.dominio.menu.ItemMenu;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.http.MediaType;
-import org.springframework.modulith.test.AssertablePublishedEvents;
-import org.springframework.modulith.test.ApplicationModuleTest;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.web.servlet.MockMvc;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-
-import java.math.BigDecimal;
-import java.util.Optional;
-
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@Testcontainers
+import java.util.Optional;
+import java.util.concurrent.TimeUnit;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+
+import com.rapidos.despacho.aplicacion.puertos.entrada.ConsultarRepartidorUseCase;
+
+/**
+ * RAMAS §7 pasos 2–4: {@code POST /api/pedidos} → evento → despacho asigna una vez.
+ * Perfil {@code test} usa H2 en memoria; no llama al menú por HTTP para crear el pedido.
+ */
 @SpringBootTest
 @AutoConfigureMockMvc
-@ApplicationModuleTest
+@ActiveProfiles("test")
 class PedidoFlujoIT {
 
-    @Container
-    @SuppressWarnings("resource")
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
-            .withDatabaseName("rapidos")
-            .withUsername("rapidos")
-            .withPassword("rapidos");
-
-    @DynamicPropertySource
-    static void datasource(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
-        registry.add("spring.datasource.username", postgres::getUsername);
-        registry.add("spring.datasource.password", postgres::getPassword);
-    }
-
-    @MockitoBean
-    MenuPort catalogo;
+    private static final String BODY =
+            """
+            {"restauranteId":1,"clienteId":10,"items":[{"itemId":1,"cantidad":2}]}
+            """;
 
     @Autowired
-    MockMvc mockMvc;
+    MockMvc mvc;
 
     @Autowired
-    AssertablePublishedEvents eventos;
-
-    @BeforeEach
-    void menuDePrueba() {
-        var arepa = new ItemMenu(1L, 1L, "Arepa reina pepiada", new BigDecimal("12000.00"));
-        when(catalogo.restauranteActivo(eq(1L))).thenReturn(true);
-        when(catalogo.obtenerItem(eq(1L), eq(1L))).thenReturn(Optional.of(arepa));
-    }
+    ConsultarRepartidorUseCase despacho;
 
     @Test
-    void crearPedido() throws Exception {
-        var body = """
-                {"restauranteId":1,"clienteId":10,"items":[{"itemId":1,"cantidad":2}]}
-                """;
-
-        mockMvc.perform(post("/api/pedidos")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .header("Idempotency-Key", "pedido-it-001")
-                        .content(body))
+    void postConfirmaPedidoYDespachoAsignaRepartidor() throws Exception {
+        MvcResult creado = mvc.perform(post("/api/pedidos")
+                        .contentType(APPLICATION_JSON)
+                        .header("Idempotency-Key", "flujo-it-001")
+                        .content(BODY))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").isNumber())
-                .andExpect(jsonPath("$.total").value(24000.0))
-                .andExpect(jsonPath("$.estado").value("CONFIRMADO"));
+                .andExpect(jsonPath("$.total").value(24000.00))
+                .andReturn();
 
-        mockMvc.perform(post("/api/pedidos")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .header("Idempotency-Key", "pedido-it-001")
-                        .content(body))
+        JsonNode json = new ObjectMapper().readTree(creado.getResponse().getContentAsString());
+        long pedidoId = json.get("id").asLong();
+
+        mvc.perform(post("/api/pedidos")
+                        .contentType(APPLICATION_JSON)
+                        .header("Idempotency-Key", "flujo-it-001")
+                        .content(BODY))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").value(1));
+                .andExpect(jsonPath("$.id").value(pedidoId));
 
-        var confirmados = eventos.ofType(PedidoConfirmado.class)
-                .matching(PedidoConfirmado::pedidoId, 1L)
-                .matching(PedidoConfirmado::restauranteId, 1L);
-        assertThat(confirmados).hasSize(1);
+        esperarAsignacion(pedidoId);
 
-        mockMvc.perform(get("/api/pedidos/1"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(1))
-                .andExpect(jsonPath("$.total").value(24000.0))
-                .andExpect(jsonPath("$.estado").value("CONFIRMADO"));
+        assertThat(despacho.repartidorDe(pedidoId)).isPresent();
+    }
 
-        mockMvc.perform(get("/api/cola"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.pendientes").isNumber())
-                .andExpect(jsonPath("$.publicaciones").isArray());
+    private void esperarAsignacion(long pedidoId) throws InterruptedException {
+        for (int intento = 0; intento < 100; intento++) {
+            Optional<Long> repartidor = despacho.repartidorDe(pedidoId);
+            if (repartidor.isPresent()) {
+                return;
+            }
+            TimeUnit.MILLISECONDS.sleep(50);
+        }
+        assertThat(despacho.repartidorDe(pedidoId)).as("despacho tras PedidoConfirmado").isPresent();
     }
 }

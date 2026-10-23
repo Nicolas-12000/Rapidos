@@ -12,7 +12,7 @@ import java.util.List;
  * Acceso a las tablas restaurante e item_menu. Lo usa la caché del menú.
  */
 @Repository
-public class MenuJdbc implements MenuRepository {
+class MenuJdbc implements MenuRepository {
 
     /** Convierte cada fila de item_menu en un ItemMenu. */
     private static final RowMapper<ItemMenu> FILA_A_ITEM = (fila, numero) -> new ItemMenu(

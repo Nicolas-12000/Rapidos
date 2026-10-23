@@ -4,15 +4,15 @@ import org.springframework.modulith.events.ApplicationModuleListener;
 import org.springframework.stereotype.Component;
 
 import com.rapidos.pedidos.ConfirmacionMedida;
-import com.rapidos.ubicacion.dominio.ReglaDegradacionGps;
+import com.rapidos.ubicacion.aplicacion.puertos.entrada.RegistrarMedidaConfirmacionUseCase;
 
 @Component
 class ConfirmacionMedidaListener {
 
-    private final ReglaDegradacionGps regla;
+    private final RegistrarMedidaConfirmacionUseCase degradacion;
 
-    ConfirmacionMedidaListener(ReglaDegradacionGps regla) {
-        this.regla = regla;
+    ConfirmacionMedidaListener(RegistrarMedidaConfirmacionUseCase degradacion) {
+        this.degradacion = degradacion;
     }
 
     @ApplicationModuleListener
@@ -20,6 +20,6 @@ class ConfirmacionMedidaListener {
         if (medida == null) {
             return;
         }
-        regla.registrar(medida.duracionMs());
+        degradacion.registrar(medida.duracionMs());
     }
 }

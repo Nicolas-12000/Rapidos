@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
@@ -13,19 +14,25 @@ import com.rapidos.pedidos.dominio.menu.ItemMenu;
 
 @Component
 @Primary
-public class MenuConCache implements MenuRepository {
+class MenuConCache implements MenuRepository {
 
     private final MenuRepository origen;
     private final CacheConTtl<Long, List<ItemMenu>> menus;
     private final CacheConTtl<Long, Boolean> activos;
 
-    public MenuConCache(
-            MenuJdbc jdbc,
-            @Value("${rapidos.catalogo.cache-ttl:5m}") Duration ttl) {
-        this(jdbc, ttl, Clock.systemUTC());
+    @Autowired
+    MenuConCache(MenuJdbc jdbc, @Value("${rapidos.menu.cache-ttl:5m}") Duration ttl) {
+        this.origen = jdbc;
+        this.menus = new CacheConTtl<>(ttl, Clock.systemUTC());
+        this.activos = new CacheConTtl<>(ttl, Clock.systemUTC());
     }
 
-    public MenuConCache(MenuRepository origen, Duration ttl, Clock clock) {
+    /** Solo pruebas: evita un segundo constructor que Spring confunde con el bean @Primary. */
+    static MenuConCache paraPruebas(MenuRepository origen, Duration ttl, Clock clock) {
+        return new MenuConCache(origen, ttl, clock);
+    }
+
+    private MenuConCache(MenuRepository origen, Duration ttl, Clock clock) {
         this.origen = origen;
         this.menus = new CacheConTtl<>(ttl, clock);
         this.activos = new CacheConTtl<>(ttl, clock);

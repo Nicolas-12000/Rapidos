@@ -1,7 +1,7 @@
 -- Cada dueño de módulo agrega SUS tablas en su sección.
 -- Usa CREATE TABLE IF NOT EXISTS para que se pueda ejecutar varias veces.
 
--- ===== catalogo (Dev 2) =====
+-- ===== menú (dentro de pedidos) =====
 CREATE TABLE IF NOT EXISTS restaurante (
     id      BIGINT       PRIMARY KEY,
     nombre  VARCHAR(120) NOT NULL,
@@ -60,4 +60,4 @@ CREATE TABLE IF NOT EXISTS despacho_estado (
 CREATE INDEX IF NOT EXISTS idx_despacho_estado_pedido
     ON despacho_estado (pedido_id, registrado_en);
 
--- ===== ubicacion: no usa base de datos (solo memoria) =====
+-- ===== ubicacion: no usa PostgreSQL (memoria o Firebase) =====

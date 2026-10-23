@@ -3,11 +3,23 @@ services:
     build: .
     container_name: rapidos-app
     ports:
-      - "8080:8080"
+      - "${SERVER_PORT:-8080}:8080"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/rapidos
-      SPRING_DATASOURCE_USERNAME: rapidos
-      SPRING_DATASOURCE_PASSWORD: rapidos
+      SERVER_PORT: 8080
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-rapidos}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-rapidos}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-rapidos}
+      RAPIDOS_WORKERS_CORE_SIZE: ${RAPIDOS_WORKERS_CORE_SIZE:-2}
+      RAPIDOS_WORKERS_MAX_SIZE: ${RAPIDOS_WORKERS_MAX_SIZE:-4}
+      RAPIDOS_WORKERS_QUEUE_CAPACITY: ${RAPIDOS_WORKERS_QUEUE_CAPACITY:-100}
+      MENU_CACHE_TTL: ${MENU_CACHE_TTL:-5m}
+      RAPIDOS_PERSISTENCIA_UBICACION: ${RAPIDOS_PERSISTENCIA_UBICACION:-memoria}
+      UBICACION_TTL_SEGUNDOS: ${UBICACION_TTL_SEGUNDOS:-30}
+      UBICACION_VENTANA_MEDIDAS: ${UBICACION_VENTANA_MEDIDAS:-20}
+      UBICACION_MINIMO_MEDICIONES: ${UBICACION_MINIMO_MEDICIONES:-5}
+      FIREBASE_DB_URL: ${FIREBASE_DB_URL:-}
+      FIREBASE_AUTH_TOKEN: ${FIREBASE_AUTH_TOKEN:-}
+      FIREBASE_TIMEOUT_MS: ${FIREBASE_TIMEOUT_MS:-2000}
     depends_on:
       - postgres
 
@@ -15,12 +27,13 @@ services:
     image: postgres:16
     container_name: rapidos-db
     environment:
-      POSTGRES_DB: rapidos
-      POSTGRES_USER: rapidos
-      POSTGRES_PASSWORD: rapidos
+      POSTGRES_DB: ${POSTGRES_DB:-rapidos}
+      POSTGRES_USER: ${POSTGRES_USER:-rapidos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rapidos}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - rapidos-data:/var/lib/postgresql/data
+
 volumes:
   rapidos-data:

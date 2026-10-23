@@ -14,7 +14,7 @@ import java.time.Instant;
 import java.util.Optional;
 
 @Repository
-public class PedidoJdbc implements PedidoRepository {
+class PedidoJdbc implements PedidoRepository {
 
     private final JdbcTemplate jdbc;
 

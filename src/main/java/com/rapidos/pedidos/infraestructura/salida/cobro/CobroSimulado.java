@@ -7,7 +7,7 @@ import java.math.BigDecimal;
 import com.rapidos.pedidos.aplicacion.puertos.salida.Cobro;
 
 @Component
-public class CobroSimulado implements Cobro {
+class CobroSimulado implements Cobro {
 
     @Override
     public boolean cobrar(Long clienteId, BigDecimal total) {

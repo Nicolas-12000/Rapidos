@@ -1,26 +1,27 @@
 package com.rapidos.despacho.aplicacion.servicios;
 
-import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
 
-import com.rapidos.despacho.ConsultaRepartidor;
+import com.rapidos.despacho.aplicacion.puertos.entrada.ConsultarRepartidorUseCase;
 import com.rapidos.despacho.aplicacion.puertos.entrada.ProcesarPedidoConfirmado;
 import com.rapidos.despacho.aplicacion.puertos.entrada.RegistrarEstadoUseCase;
 import com.rapidos.despacho.aplicacion.puertos.salida.Avisador;
 import com.rapidos.despacho.aplicacion.puertos.salida.DespachoRepository;
+import com.rapidos.despacho.aplicacion.puertos.salida.Reloj;
 import com.rapidos.despacho.dominio.EstadoEntrega;
+import com.rapidos.despacho.dominio.LlaveEstado;
 import com.rapidos.pedidos.PedidoConfirmado;
 
-public class DespachoService implements ProcesarPedidoConfirmado, RegistrarEstadoUseCase, ConsultaRepartidor {
+public class DespachoService implements ProcesarPedidoConfirmado, RegistrarEstadoUseCase, ConsultarRepartidorUseCase {
 
     private static final long REPARTIDORES_DEMO = 4;
 
     private final DespachoRepository repositorio;
     private final Avisador avisador;
-    private final Clock reloj;
+    private final Reloj reloj;
 
-    public DespachoService(DespachoRepository repositorio, Avisador avisador, Clock reloj) {
+    public DespachoService(DespachoRepository repositorio, Avisador avisador, Reloj reloj) {
         this.repositorio = repositorio;
         this.avisador = avisador;
         this.reloj = reloj;
@@ -31,7 +32,7 @@ public class DespachoService implements ProcesarPedidoConfirmado, RegistrarEstad
         validarPedidoConfirmado(pedido);
         Long repartidorId = asignarRepartidor(pedido.pedidoId());
 
-        if (!repositorio.crearAsignacion(pedido.pedidoId(), repartidorId, reloj.instant())) {
+        if (!repositorio.crearAsignacion(pedido.pedidoId(), repartidorId, reloj.ahora())) {
             return;
         }
 
@@ -41,7 +42,11 @@ public class DespachoService implements ProcesarPedidoConfirmado, RegistrarEstad
 
     @Override
     public void registrarEstado(Long repartidorId, Long pedidoId, EstadoEntrega estado, String llave) {
-        validarEstado(repartidorId, pedidoId, estado, llave);
+        if (repartidorId == null || pedidoId == null || estado == null) {
+            throw new IllegalArgumentException("repartidorId, pedidoId y estado son obligatorios");
+        }
+        // LlaveEstado encapsula la regla de dominio: nula o vacía nunca es válida (ADR-003)
+        LlaveEstado llaveValida = LlaveEstado.de(llave);
 
         Long asignado = repositorio.repartidorDe(pedidoId)
                 .orElseThrow(() -> new IllegalStateException("El pedido no tiene un despacho asignado"));
@@ -49,8 +54,8 @@ public class DespachoService implements ProcesarPedidoConfirmado, RegistrarEstad
             throw new IllegalStateException("El pedido pertenece a otro repartidor");
         }
 
-        Instant ahora = reloj.instant();
-        if (repositorio.guardarEstado(pedidoId, repartidorId, estado, llave.trim(), ahora)) {
+        Instant ahora = reloj.ahora();
+        if (repositorio.guardarEstado(pedidoId, repartidorId, estado, llaveValida.valor(), ahora)) {
             repositorio.actualizarEstado(pedidoId, estado, ahora);
         }
     }
@@ -78,16 +83,6 @@ public class DespachoService implements ProcesarPedidoConfirmado, RegistrarEstad
     private static void validarPedidoConfirmado(PedidoConfirmado pedido) {
         if (pedido == null || pedido.pedidoId() == null || pedido.restauranteId() == null) {
             throw new IllegalArgumentException("El pedido confirmado está incompleto");
-        }
-    }
-
-    private static void validarEstado(
-            Long repartidorId,
-            Long pedidoId,
-            EstadoEntrega estado,
-            String llave) {
-        if (repartidorId == null || pedidoId == null || estado == null || llave == null || llave.isBlank()) {
-            throw new IllegalArgumentException("repartidorId, pedidoId, estado y llave son obligatorios");
         }
     }
 }

@@ -1,10 +1,10 @@
 package com.rapidos.ubicacion.aplicacion.servicios;
 
-import java.time.Clock;
 import java.util.Optional;
 
 import com.rapidos.ubicacion.aplicacion.puertos.entrada.ReportarUbicacionUseCase;
 import com.rapidos.ubicacion.aplicacion.puertos.salida.RepartidorDePedido;
+import com.rapidos.ubicacion.aplicacion.puertos.salida.Reloj;
 import com.rapidos.ubicacion.aplicacion.puertos.salida.UbicacionStore;
 import com.rapidos.ubicacion.dominio.ReglaDegradacionGps;
 import com.rapidos.ubicacion.dominio.UbicacionActual;
@@ -14,13 +14,13 @@ public class UbicacionService implements ReportarUbicacionUseCase {
     private final RepartidorDePedido repartidores;
     private final ReglaDegradacionGps reglaDegradacion;
     private final UbicacionStore almacen;
-    private final Clock reloj;
+    private final Reloj reloj;
 
     public UbicacionService(
             RepartidorDePedido repartidores,
             ReglaDegradacionGps reglaDegradacion,
             UbicacionStore almacen,
-            Clock reloj) {
+            Reloj reloj) {
         this.repartidores = repartidores;
         this.reglaDegradacion = reglaDegradacion;
         this.almacen = almacen;
@@ -29,7 +29,7 @@ public class UbicacionService implements ReportarUbicacionUseCase {
 
     @Override
     public void reportar(Long repartidorId, double lat, double lon) {
-        almacen.guardar(new UbicacionActual(repartidorId, lat, lon, reloj.instant()));
+        almacen.guardar(new UbicacionActual(repartidorId, lat, lon, reloj.ahora()));
     }
 
     @Override
