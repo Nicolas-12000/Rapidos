@@ -23,3 +23,10 @@ rapidos:
     max-size: 4
     core-size: 2
     queue-capacity: 100
+  ubicacion:
+    store: ${UBICACION_STORE:memoria}      # memoria | firebase
+    ttl-segundos: 30
+    firebase:
+      url: ${FIREBASE_DB_URL:}             # https://<proyecto>-default-rtdb.firebaseio.com
+      auth-token: ${FIREBASE_AUTH_TOKEN:}  # opcional; no lo subas al repo
+      timeout-ms: 2000
