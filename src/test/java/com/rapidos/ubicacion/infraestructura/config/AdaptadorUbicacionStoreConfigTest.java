@@ -18,10 +18,12 @@ class AdaptadorUbicacionStoreConfigTest {
 
     @Test
     void memoriaPorOmision() {
-        contexto.run(ctx -> {
-            assertThat(ctx).hasSingleBean(UbicacionStore.class);
-            assertThat(ctx.getBean(UbicacionStore.class)).isInstanceOf(UbicacionEnMemoria.class);
-        });
+        contexto
+                .withPropertyValues("rapidos.persistencia.ubicacion=memoria")
+                .run(ctx -> {
+                    assertThat(ctx).hasSingleBean(UbicacionStore.class);
+                    assertThat(ctx.getBean(UbicacionStore.class)).isInstanceOf(UbicacionEnMemoria.class);
+                });
     }
 
     @Test

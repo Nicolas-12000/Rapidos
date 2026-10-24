@@ -8,7 +8,6 @@ import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
 import java.sql.PreparedStatement;
-import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Optional;
@@ -63,7 +62,7 @@ class PedidoJdbc implements PedidoRepository {
                     INSERT INTO pedido (restaurante_id, cliente_id, total, estado, creado_en, llave_pedido)
                     VALUES (?, ?, ?, ?, ?, ?)
                     """,
-                    Statement.RETURN_GENERATED_KEYS);
+                    new String[] {"id"});
             ps.setLong(1, restauranteId);
             ps.setLong(2, clienteId);
             ps.setBigDecimal(3, total);
@@ -72,7 +71,7 @@ class PedidoJdbc implements PedidoRepository {
             ps.setString(6, llavePedido);
             return ps;
         }, keyHolder);
-        Long id = keyHolder.getKey().longValue();
+        Long id = ((Number) keyHolder.getKeys().get("id")).longValue();
         return new PedidoResumen(id, restauranteId, clienteId, total, estado, creadoEn);
     }
 
